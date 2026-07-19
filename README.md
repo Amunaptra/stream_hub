@@ -27,4 +27,6 @@ python -m venv .venv
 
 Odroid kurulum bilgisi için [device/README.md](device/README.md), cihaz API sözleşmesi için [docs/device-api-v1.md](docs/device-api-v1.md), keşif akışı için [docs/discovery-and-heartbeat.md](docs/discovery-and-heartbeat.md), merkezi komut akışı için [docs/central-management.md](docs/central-management.md) dosyasına bakın.
 
+Bağımsız Odroid ve Hub dağıtım arşivlerini üretme ve tek komutla kurma bilgisi için [docs/installation-packages.md](docs/installation-packages.md) dosyasına bakın.
+
 Proje kararları ve ilerleme kayıtları için [stream_hub_change_log.md](stream_hub_change_log.md) dosyasına bakın.

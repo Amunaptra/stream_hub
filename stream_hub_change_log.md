@@ -336,3 +336,31 @@ Tamamlandı; otomatik testler ve 50 yayınlı yerel Hub arayüzüyle doğruland�
 - Toplam 38 otomatik test başarıyla tamamlandı.
 - JavaScript syntax, Python compile ve whitespace kontrolleri başarılı.
 - Yerel demo panelinde 50 yayın satırının 47 sağlıklı ve 3 hatalı olarak gösterildiği doğrulandı.
+
+## 2026-07-19 - Bağımsız tek-komut kurulum paketleri
+
+### Durum
+
+Tamamlandı; Odroid ve merkezi Hub için ayrı dağıtım arşivleri üretildi.
+
+### Yapılanlar
+
+- Odroid için `stream-hub-odroid-<version>.tar.gz` bağımsız dağıtım formatı eklendi.
+- Merkezi Hub için `stream-hub-server-<version>.tar.gz` bağımsız dağıtım formatı eklendi.
+- Her paketin köküne tek giriş noktası olarak `install.sh` eklendi.
+- Mevcut installer'lar repo kökü veya bağımsız paket köküyle çalışabilecek şekilde düzenlendi.
+- Odroid paketine agent, player, systemd/journald dosyaları, Python proje tanımı ve sabitlenmiş gereksinimler dahil edildi.
+- Hub paketine backend, web arayüzü, systemd/journald dosyaları ve backup aracı dahil edildi.
+- Odroid installer'ın eksik `curl` sistem bağımlılığı otomatik apt kurulumuna eklendi.
+- Her iki installer işletim sistemi paketlerini ve izole venv içindeki Python bağımlılıklarını otomatik kuracak şekilde doğrulandı.
+- Paket içeriği için `MANIFEST.sha256`, üretilen arşivler için `SHA256SUMS` oluşturulması eklendi.
+- Paket üretim ve tek satırlık kurulum komutları dokümante edildi.
+
+### Doğrulama
+
+- İki arşivin birbirinden bağımsız ve gerekli dosyalarla üretildiği test edildi.
+- Arşivlerde `__pycache__` ve derlenmiş Python artıklarının bulunmadığı doğrulandı.
+- Kök `install.sh` dosyalarının çalıştırılabilir Unix izniyle paketlendiği doğrulandı.
+- Installer'ların gerekli apt ve pip kurulum adımlarını içerdiği test edildi.
+- Arşiv SHA-256 değerlerinin `SHA256SUMS` ile eşleştiği doğrulandı.
+- Toplam 40 otomatik test başarıyla tamamlandı.

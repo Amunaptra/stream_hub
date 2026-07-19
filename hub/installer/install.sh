@@ -7,12 +7,12 @@ readonly BACKUP_DIR="/var/backups/stream-hub"
 readonly CONFIG_DIR="/etc/stream-hub"
 readonly ENV_FILE="${CONFIG_DIR}/hub.env"
 readonly SERVICE_USER="stream-hub"
-readonly SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+readonly SOURCE_ROOT="${STREAM_HUB_SOURCE_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
 log() { printf '\n[stream-hub-install] %s\n' "$*"; }
 fail() { printf '\n[stream-hub-install] ERROR: %s\n' "$*" >&2; exit 1; }
 
-[[ "${EUID}" -eq 0 ]] || fail "Run as root: sudo ./hub/installer/install.sh"
+[[ "${EUID}" -eq 0 ]] || fail "Run as root: sudo ./install.sh"
 command -v apt-get >/dev/null || fail "This installer currently supports Debian/Ubuntu systems"
 
 log "Installing Hub runtime packages"

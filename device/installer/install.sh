@@ -7,12 +7,12 @@ readonly JOURNAL_DROPIN="/etc/systemd/journald.conf.d/stream-hub-storage.conf"
 readonly AGENT_USER="stream-agent"
 readonly SHARED_GROUP="stream-hub"
 readonly PLAYER_USER="${PLAYER_USER:-odroid}"
-readonly SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+readonly SOURCE_ROOT="${STREAM_HUB_SOURCE_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
 log() { printf '\n[stream-hub-install] %s\n' "$*"; }
 fail() { printf '\n[stream-hub-install] ERROR: %s\n' "$*" >&2; exit 1; }
 
-[[ "${EUID}" -eq 0 ]] || fail "Run as root: sudo ./device/installer/install.sh"
+[[ "${EUID}" -eq 0 ]] || fail "Run as root: sudo ./install.sh"
 command -v apt-get >/dev/null || fail "This installer currently supports Debian/Ubuntu systems"
 id "${PLAYER_USER}" >/dev/null 2>&1 || fail "Player user '${PLAYER_USER}' does not exist"
 
@@ -21,6 +21,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
   ca-certificates \
+  curl \
   ffmpeg \
   mpv \
   python3 \
