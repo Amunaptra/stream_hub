@@ -6,6 +6,7 @@ const state = {
   filter: "all",
   selected: null,
   config: null,
+  streamHealth: [],
   timer: null,
 };
 
@@ -191,11 +192,12 @@ async function loadDevices(showToast = false) {
 }
 
 async function openDevice(deviceId) {
-  const [device, config] = await Promise.all([
+  const [device, config, streamHealth] = await Promise.all([
     api(`/api/v1/devices/${encodeURIComponent(deviceId)}`),
     api(`/api/v1/devices/${encodeURIComponent(deviceId)}/config`),
+    api(`/api/v1/devices/${encodeURIComponent(deviceId)}/stream-health`),
   ]);
-  state.selected = device; state.config = config;
+  state.selected = device; state.config = config; state.streamHealth = streamHealth;
   renderDrawer();
 }
 
@@ -203,19 +205,38 @@ function detailStat(label, value) {
   const node = el("div", "detail-stat"); node.append(el("span", "", label), el("strong", "", value)); return node;
 }
 
-function streamRow(stream = { id: "", enabled: true, seconds: 20, url: "" }) {
+function streamHealthView(stream, health) {
+  const wrap = el("div", "stream-health");
+  if (!stream.enabled) {
+    wrap.append(badge("Devre dışı"));
+    return wrap;
+  }
+  if (!health) {
+    wrap.append(badge("Kontrol bekliyor"));
+    return wrap;
+  }
+  wrap.append(badge(health.ok ? "Sağlıklı" : "Hatalı", health.ok ? "ok" : "bad"));
+  const details = health.ok
+    ? `${health.status_code ?? "—"} · ${health.latency_ms} ms`
+    : `${health.status_code ?? "—"} · ${health.error || "Kaynak yanıt vermiyor"}`;
+  const checked = new Date(health.checked_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  wrap.append(el("small", "", details), el("small", "", `Son kontrol ${checked}`));
+  return wrap;
+}
+
+function streamRow(stream = { id: "", enabled: true, seconds: 20, url: "" }, health = null) {
   const row = el("div", "stream-row");
   const enabled = document.createElement("input"); enabled.type = "checkbox"; enabled.checked = stream.enabled; enabled.className = "stream-enabled"; enabled.title = "Aktif";
   const id = document.createElement("input"); id.value = stream.id; id.placeholder = "Yayın ID"; id.className = "stream-id";
   const seconds = document.createElement("input"); seconds.type = "number"; seconds.min = "0"; seconds.max = "86400"; seconds.value = stream.seconds; seconds.className = "stream-seconds";
   const url = document.createElement("input"); url.value = stream.url; url.placeholder = "https://…/index.m3u8"; url.className = "stream-url";
   const remove = el("button", "btn ghost remove", "×"); remove.title = "Yayını kaldır"; remove.onclick = () => row.remove();
-  row.append(enabled, id, seconds, url, remove); return row;
+  row.append(enabled, id, seconds, url, streamHealthView(stream, health), remove); return row;
 }
 
 function renderDrawer() {
   document.querySelector(".drawer-backdrop")?.remove();
-  const device = state.selected, config = state.config;
+  const device = state.selected, config = state.config, streamHealth = state.streamHealth;
   const backdrop = el("div", "drawer-backdrop");
   const drawer = el("aside", "drawer");
   const head = el("div", "drawer-head");
@@ -241,9 +262,15 @@ function renderDrawer() {
   }
   const playlistSection = el("section", "section");
   const sectionTitle = el("div", "section-title"); sectionTitle.append(el("h3", "", "Oynatma listesi"));
+  const healthyCount = streamHealth.filter(item => item.ok).length;
+  const unhealthyCount = streamHealth.filter(item => !item.ok).length;
+  const healthSummary = el("div", "playlist-health-summary");
+  healthSummary.append(badge(`${healthyCount} sağlıklı`, "ok"), badge(`${unhealthyCount} hatalı`, unhealthyCount ? "bad" : ""));
+  sectionTitle.append(healthSummary);
   const actions = el("div", "actions"); const add = el("button", "btn", "+ Yayın"); const send = el("button", "btn primary", "Kaydet ve gönder");
   actions.append(add, send); sectionTitle.append(actions); playlistSection.append(sectionTitle);
-  const playlist = el("div", "playlist"); (config.streams || []).forEach(item => playlist.append(streamRow(item))); if (!config.streams?.length) playlist.append(streamRow());
+  const healthById = new Map(streamHealth.map(item => [item.id, item]));
+  const playlist = el("div", "playlist"); (config.streams || []).forEach(item => playlist.append(streamRow(item, healthById.get(item.id)))); if (!config.streams?.length) playlist.append(streamRow());
   add.onclick = () => {
     if (playlist.children.length >= MAX_PLAYLIST_STREAMS) {
       toast(`Bir oynatma listesi en fazla ${MAX_PLAYLIST_STREAMS} yayın içerebilir`);

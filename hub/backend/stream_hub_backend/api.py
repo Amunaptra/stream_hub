@@ -33,6 +33,7 @@ from .models import (
     HubHeartbeatResponse,
     HubPlaylistConfig,
     HubPlaylistDraft,
+    HubStreamHealth,
 )
 from .settings import HubSettings
 
@@ -187,6 +188,17 @@ def create_app(settings: HubSettings) -> FastAPI:
     def device(device_id: str) -> DeviceRecord:
         try:
             return database.get(device_id, settings.offline_after_seconds)
+        except DeviceNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="device not found") from exc
+
+    @app.get(
+        "/api/v1/devices/{device_id}/stream-health",
+        response_model=list[HubStreamHealth],
+        dependencies=admin,
+    )
+    def stream_health(device_id: str) -> list[HubStreamHealth]:
+        try:
+            return database.stream_health(device_id)
         except DeviceNotFoundError as exc:
             raise HTTPException(status_code=404, detail="device not found") from exc
 

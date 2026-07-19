@@ -32,6 +32,18 @@ def payload(device_id: str = "odroid-test-001") -> dict:
                 }
             ],
         },
+        "stream_health": [
+            {
+                "id": "salon-1",
+                "url": "http://media/salon-1.m3u8",
+                "enabled": True,
+                "ok": True,
+                "status_code": 200,
+                "latency_ms": 37,
+                "error": None,
+                "checked_at": now,
+            }
+        ],
         "status": {
             "device_id": device_id,
             "hostname": "stream-test-01",
@@ -260,6 +272,27 @@ def test_hub_reads_reported_config_before_any_desired_config_exists(tmp_path) ->
     assert response.status_code == 200
     assert response.json()["revision"] == 4
     assert response.json()["streams"][0]["id"] == "salon-1"
+
+
+def test_hub_stores_and_returns_stream_health(tmp_path) -> None:
+    client, _ = make_client(tmp_path)
+    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
+    with client:
+        client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
+        unauthorized = client.get(
+            "/api/v1/devices/odroid-test-001/stream-health"
+        )
+        response = client.get(
+            "/api/v1/devices/odroid-test-001/stream-health", headers=admin
+        )
+
+    assert unauthorized.status_code == 401
+    assert response.status_code == 200
+    assert response.json()[0]["id"] == "salon-1"
+    assert response.json()[0]["ok"] is True
+    assert response.json()[0]["status_code"] == 200
+    assert response.json()[0]["latency_ms"] == 37
 
 
 def test_approved_device_receives_reboot_command_and_reports_result(tmp_path) -> None:

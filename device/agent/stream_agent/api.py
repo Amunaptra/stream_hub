@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
 
 from . import __version__
-from .health import check_playlist
+from .health import StreamHealthMonitor
 from .heartbeat import HeartbeatWorker
 from .models import (
     CommandResult,
@@ -36,17 +36,28 @@ def create_app(
     identity = store.load_or_create_identity()
     controller = controller or SystemController(settings)
 
-    heartbeat = HeartbeatWorker(settings, identity, store, controller)
+    health_monitor = StreamHealthMonitor(
+        store, settings.stream_health_interval_seconds
+    )
+    heartbeat = HeartbeatWorker(
+        settings, identity, store, controller, health_monitor
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        task = asyncio.create_task(heartbeat.run(), name="hub-heartbeat")
+        heartbeat_task = asyncio.create_task(heartbeat.run(), name="hub-heartbeat")
+        health_task = asyncio.create_task(
+            health_monitor.run(), name="stream-health-monitor"
+        )
         try:
             yield
         finally:
-            task.cancel()
+            heartbeat_task.cancel()
+            health_task.cancel()
             with suppress(asyncio.CancelledError):
-                await task
+                await heartbeat_task
+            with suppress(asyncio.CancelledError):
+                await health_task
 
     app = FastAPI(
         title="Stream Hub Device Agent",
@@ -58,6 +69,7 @@ def create_app(
     app.state.identity = identity
     app.state.controller = controller
     app.state.heartbeat = heartbeat
+    app.state.health_monitor = health_monitor
 
     def require_device_token(
         authorization: Annotated[str | None, Header()] = None,
@@ -151,7 +163,7 @@ def create_app(
         dependencies=authenticated,
     )
     async def stream_health() -> list[HealthItem]:
-        return await check_playlist(store.load_playlist())
+        return await health_monitor.refresh()
 
     @app.post(
         "/api/v1/player/restart",

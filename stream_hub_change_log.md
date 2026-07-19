@@ -309,3 +309,30 @@ Tamamlandı ve otomatik testlerle doğrulandı.
 - Hub modeliyle tam 50 bağlantılı playlist'in kabul edildiği test edildi.
 - Hem cihaz hem Hub modellerinin 51 bağlantılı playlist'i reddettiği test edildi.
 - Toplam 37 otomatik test başarıyla tamamlandı.
+
+## 2026-07-19 - Yayın bazlı sağlık takibi
+
+### Durum
+
+Tamamlandı; otomatik testler ve 50 yayınlı yerel Hub arayüzüyle doğrulandı.
+
+### Yapılanlar
+
+- Her Odroid'in yayın URL'lerini kendi ağ bağlantısı üzerinden HLS manifest seviyesinde kontrol etmesi merkezi sağlık akışına bağlandı.
+- Kontroller cihaz yükünü korumak için varsayılan 60 saniye aralık ve en fazla 6 eşzamanlı bağlantıyla sınırlandı.
+- Sağlık sonuçlarının agent belleğinde önbelleğe alınması ve heartbeat ile Hub'a gönderilmesi eklendi.
+- Yayın kimliği, URL, aktiflik, sağlık durumu, HTTP kodu, gecikme, hata ve son kontrol zamanı Hub SQLite veritabanında saklanmaya başlandı.
+- Yönetici API'sine cihaz bazlı `GET /api/v1/devices/{device_id}/stream-health` endpoint'i eklendi.
+- Web playlist editörüne her yayın için `Sağlıklı`, `Hatalı`, `Devre dışı` ve `Kontrol bekliyor` göstergeleri eklendi.
+- Her satırda HTTP kodu, gecikme, hata açıklaması ve son kontrol zamanı gösterildi.
+- Oynatma listesi başlığına sağlıklı ve hatalı yayın toplamları eklendi.
+- Kaynak sağlığı ile aktif MPV oynatıcı durumunun ayrı sinyaller olduğu dokümante edildi.
+
+### Doğrulama
+
+- Heartbeat'in önbellekteki yayın sağlık sonuçlarını gönderdiği test edildi.
+- Hub'ın sağlık sonuçlarını sakladığı ve yetkili API üzerinden döndürdüğü test edildi.
+- Sağlık endpoint'inin yetkisiz isteği reddettiği doğrulandı.
+- Toplam 38 otomatik test başarıyla tamamlandı.
+- JavaScript syntax, Python compile ve whitespace kontrolleri başarılı.
+- Yerel demo panelinde 50 yayın satırının 47 sağlıklı ve 3 hatalı olarak gösterildiği doğrulandı.

@@ -15,6 +15,7 @@ from .models import (
     HubHeartbeatPayload,
     HubPlaylistConfig,
     HubPlaylistDraft,
+    HubStreamHealth,
 )
 
 
@@ -108,6 +109,22 @@ class HubDatabase:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS stream_health (
+                    device_id TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+                    stream_id TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    enabled INTEGER NOT NULL,
+                    ok INTEGER NOT NULL,
+                    status_code INTEGER,
+                    latency_ms INTEGER NOT NULL,
+                    error TEXT,
+                    checked_at TEXT NOT NULL,
+                    PRIMARY KEY (device_id, stream_id)
+                )
+                """
+            )
 
     def upsert_heartbeat(self, payload: HubHeartbeatPayload, token: str) -> bool:
         now = datetime.now(timezone.utc).isoformat()
@@ -195,7 +212,64 @@ class HubDatabase:
                     now,
                 ),
             )
+            connection.execute(
+                "DELETE FROM stream_health WHERE device_id = ?", (payload.device_id,)
+            )
+            if payload.stream_health:
+                connection.executemany(
+                    """
+                    INSERT INTO stream_health (
+                        device_id, stream_id, url, enabled, ok, status_code,
+                        latency_ms, error, checked_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            payload.device_id,
+                            item.id,
+                            item.url,
+                            int(item.enabled),
+                            int(item.ok),
+                            item.status_code,
+                            item.latency_ms,
+                            item.error,
+                            item.checked_at.isoformat(),
+                        )
+                        for item in payload.stream_health
+                    ],
+                )
             return bool(row["approved"])
+
+    def stream_health(self, device_id: str) -> list[HubStreamHealth]:
+        with self.connect() as connection:
+            exists = connection.execute(
+                "SELECT 1 FROM devices WHERE device_id = ?", (device_id,)
+            ).fetchone()
+            if not exists:
+                raise DeviceNotFoundError(device_id)
+            rows = connection.execute(
+                """
+                SELECT stream_id, url, enabled, ok, status_code, latency_ms,
+                       error, checked_at
+                FROM stream_health
+                WHERE device_id = ?
+                ORDER BY stream_id COLLATE NOCASE
+                """,
+                (device_id,),
+            ).fetchall()
+        return [
+            HubStreamHealth(
+                id=row["stream_id"],
+                url=row["url"],
+                enabled=bool(row["enabled"]),
+                ok=bool(row["ok"]),
+                status_code=row["status_code"],
+                latency_ms=row["latency_ms"],
+                error=row["error"],
+                checked_at=datetime.fromisoformat(row["checked_at"]),
+            )
+            for row in rows
+        ]
 
     def authenticate_device(self, device_id: str, token: str) -> None:
         with self.connect() as connection:

@@ -8,6 +8,7 @@ import httpx
 
 from . import __version__
 from .discovery import discover_hub
+from .health import StreamHealthMonitor
 from .models import DeviceIdentity, HeartbeatPayload, HeartbeatResponse
 from .settings import Settings
 from .storage import DeviceStore
@@ -25,11 +26,13 @@ class HeartbeatWorker:
         identity: DeviceIdentity,
         store: DeviceStore,
         controller: SystemController,
+        health_monitor: StreamHealthMonitor | None = None,
     ):
         self.settings = settings
         self.identity = identity
         self.store = store
         self.controller = controller
+        self.health_monitor = health_monitor
         self.hub_url = settings.hub_url
         self._last_error: str | None = None
 
@@ -54,6 +57,9 @@ class HeartbeatWorker:
             agent_port=self.settings.agent_port,
             status=status,
             reported_config=self.store.load_playlist(),
+            stream_health=(
+                self.health_monitor.snapshot() if self.health_monitor else []
+            ),
         )
 
     async def send_once(self, client: httpx.AsyncClient) -> HeartbeatResponse | None:

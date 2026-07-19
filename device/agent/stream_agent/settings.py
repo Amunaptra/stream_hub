@@ -13,6 +13,7 @@ class Settings:
     agent_port: int = 8787
     hub_url: str | None = None
     heartbeat_interval_seconds: float = 10.0
+    stream_health_interval_seconds: float = 60.0
     discovery_timeout_seconds: float = 3.0
 
     @classmethod
@@ -25,6 +26,9 @@ class Settings:
             hub_url=os.environ.get("STREAM_HUB_URL") or None,
             heartbeat_interval_seconds=float(
                 os.environ.get("STREAM_HUB_HEARTBEAT_INTERVAL", "10")
+            ),
+            stream_health_interval_seconds=float(
+                os.environ.get("STREAM_HUB_STREAM_HEALTH_INTERVAL", "60")
             ),
             discovery_timeout_seconds=float(
                 os.environ.get("STREAM_HUB_DISCOVERY_TIMEOUT", "3")

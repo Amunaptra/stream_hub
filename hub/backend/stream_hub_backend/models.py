@@ -39,6 +39,7 @@ class HubHeartbeatPayload(BaseModel):
     agent_port: int = Field(ge=1, le=65535)
     status: HubDeviceStatus
     reported_config: "HubPlaylistConfig"
+    stream_health: list["HubStreamHealth"] = Field(default_factory=list, max_length=50)
 
 
 class HubHeartbeatResponse(BaseModel):
@@ -78,6 +79,17 @@ class HubPlaylistDraft(BaseModel):
 
 class HubPlaylistConfig(HubPlaylistDraft):
     revision: int = Field(ge=0)
+
+
+class HubStreamHealth(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    url: str = Field(min_length=8, max_length=2_048)
+    enabled: bool
+    ok: bool
+    status_code: int | None = None
+    latency_ms: int = Field(ge=0)
+    error: str | None = Field(default=None, max_length=500)
+    checked_at: datetime
 
 
 class HubCommand(BaseModel):

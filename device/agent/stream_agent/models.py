@@ -96,6 +96,7 @@ class HealthItem(BaseModel):
     status_code: int | None = None
     latency_ms: int
     error: str | None = None
+    checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class HeartbeatPayload(BaseModel):
@@ -105,6 +106,7 @@ class HeartbeatPayload(BaseModel):
     agent_port: int
     status: DeviceStatus
     reported_config: PlaylistConfig
+    stream_health: list[HealthItem] = Field(default_factory=list, max_length=50)
 
 
 class HeartbeatResponse(BaseModel):

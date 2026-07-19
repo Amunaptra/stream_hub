@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 
 import httpx
 
 from .models import HealthItem, PlaylistConfig, StreamItem
+from .storage import DeviceStore
+
+
+LOGGER = logging.getLogger("stream-agent.health")
 
 
 async def _check_stream(client: httpx.AsyncClient, stream: StreamItem) -> HealthItem:
@@ -57,3 +62,32 @@ async def check_playlist(playlist: PlaylistConfig) -> list[HealthItem]:
                 return await _check_stream(client, stream)
 
         return await asyncio.gather(*(limited(stream) for stream in streams))
+
+
+class StreamHealthMonitor:
+    def __init__(self, store: DeviceStore, interval_seconds: float = 60.0):
+        self.store = store
+        self.interval_seconds = max(15.0, interval_seconds)
+        self._results: list[HealthItem] = []
+        self._lock = asyncio.Lock()
+
+    def snapshot(self) -> list[HealthItem]:
+        return list(self._results)
+
+    async def refresh(self) -> list[HealthItem]:
+        async with self._lock:
+            results = await check_playlist(self.store.load_playlist())
+            self._results = results
+            return self.snapshot()
+
+    async def run(self) -> None:
+        while True:
+            started = time.monotonic()
+            try:
+                await self.refresh()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                LOGGER.warning("stream health check failed: %s", type(exc).__name__)
+            elapsed = time.monotonic() - started
+            await asyncio.sleep(max(1.0, self.interval_seconds - elapsed))
