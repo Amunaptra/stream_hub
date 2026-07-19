@@ -15,7 +15,7 @@ Projenin ilk hedefi 15 cihazı destekleyen bir MVP oluşturmaktır. Cihazlar Hub
 
 ## Güncel durum
 
-Cihaz çalışma katmanı, mDNS discovery, heartbeat, Hub cihaz envanteri, merkezi config senkronizasyonu ve komut kuyruğu tamamlandı. Merkezi web arayüzü sıradaki geliştirme aşamasıdır.
+Cihaz çalışma katmanı, mDNS discovery, heartbeat, Hub cihaz envanteri, merkezi config senkronizasyonu, komut kuyruğu ve merkezi web arayüzü tamamlandı. Her cihazın oynatma listesi en fazla 50 yayın bağlantısını destekler.
 
 Yerel doğrulama:
 

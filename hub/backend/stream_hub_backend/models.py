@@ -66,7 +66,7 @@ class HubStreamItem(BaseModel):
 
 class HubPlaylistDraft(BaseModel):
     default_seconds: int = Field(default=20, ge=0, le=86_400)
-    streams: list[HubStreamItem] = Field(default_factory=list, max_length=40)
+    streams: list[HubStreamItem] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def unique_stream_ids(self) -> "HubPlaylistDraft":

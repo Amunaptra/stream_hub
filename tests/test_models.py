@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from stream_hub_backend.models import HubPlaylistDraft, HubStreamItem
 from stream_agent.models import PlaylistConfig, StreamItem
 
 
@@ -38,10 +39,37 @@ def test_stream_rejects_non_http_urls(url: str) -> None:
         StreamItem(id="bad", url=url)
 
 
-def test_playlist_rejects_more_than_forty_streams() -> None:
+def test_device_playlist_accepts_fifty_streams() -> None:
     streams = [
         StreamItem(id=f"stream-{index}", url=f"http://media/{index}.m3u8")
-        for index in range(41)
+        for index in range(50)
+    ]
+
+    assert len(PlaylistConfig(streams=streams).streams) == 50
+
+
+def test_device_playlist_rejects_more_than_fifty_streams() -> None:
+    streams = [
+        StreamItem(id=f"stream-{index}", url=f"http://media/{index}.m3u8")
+        for index in range(51)
     ]
     with pytest.raises(ValidationError):
         PlaylistConfig(streams=streams)
+
+
+def test_hub_playlist_accepts_fifty_streams() -> None:
+    streams = [
+        HubStreamItem(id=f"stream-{index}", url=f"http://media/{index}.m3u8")
+        for index in range(50)
+    ]
+
+    assert len(HubPlaylistDraft(streams=streams).streams) == 50
+
+
+def test_hub_playlist_rejects_more_than_fifty_streams() -> None:
+    streams = [
+        HubStreamItem(id=f"stream-{index}", url=f"http://media/{index}.m3u8")
+        for index in range(51)
+    ]
+    with pytest.raises(ValidationError):
+        HubPlaylistDraft(streams=streams)

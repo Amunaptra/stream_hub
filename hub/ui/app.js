@@ -1,4 +1,5 @@
 const app = document.querySelector("#app");
+const MAX_PLAYLIST_STREAMS = 50;
 
 const state = {
   devices: [],
@@ -243,7 +244,13 @@ function renderDrawer() {
   const actions = el("div", "actions"); const add = el("button", "btn", "+ Yayın"); const send = el("button", "btn primary", "Kaydet ve gönder");
   actions.append(add, send); sectionTitle.append(actions); playlistSection.append(sectionTitle);
   const playlist = el("div", "playlist"); (config.streams || []).forEach(item => playlist.append(streamRow(item))); if (!config.streams?.length) playlist.append(streamRow());
-  add.onclick = () => { if (playlist.children.length < 40) playlist.append(streamRow()); };
+  add.onclick = () => {
+    if (playlist.children.length >= MAX_PLAYLIST_STREAMS) {
+      toast(`Bir oynatma listesi en fazla ${MAX_PLAYLIST_STREAMS} yayın içerebilir`);
+      return;
+    }
+    playlist.append(streamRow());
+  };
   send.disabled = !device.approved;
   send.onclick = async () => {
     const streams = [...playlist.querySelectorAll(".stream-row")].map(row => ({

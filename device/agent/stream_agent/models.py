@@ -24,7 +24,7 @@ class StreamItem(BaseModel):
 class PlaylistConfig(BaseModel):
     revision: int = Field(default=0, ge=0)
     default_seconds: int = Field(default=20, ge=0, le=86_400)
-    streams: list[StreamItem] = Field(default_factory=list, max_length=40)
+    streams: list[StreamItem] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def unique_stream_ids(self) -> "PlaylistConfig":

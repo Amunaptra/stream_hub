@@ -288,3 +288,24 @@ Tamamlandı; canlı Odroid gerektirmeyen yerel demo Hub üzerinde doğrulandı.
 - Cihaz detay çekmecesinde IP, CPU/RAM, disk, sıcaklık, log kullanımı, uptime ve revision bilgilerinin gösterildiği doğrulandı.
 - Oynatma listesi düzenleme, `Kaydet ve gönder`, `Player restart` ve `Cihazı reboot et` kontrollerinin görünür olduğu doğrulandı.
 - Yerel yönetim paneli Codex uygulamasının tarayıcısında kullanıcıya açık bırakıldı.
+
+## 2026-07-19 - 50 bağlantılı oynatma listesi desteği
+
+### Durum
+
+Tamamlandı ve otomatik testlerle doğrulandı.
+
+### Yapılanlar
+
+- Cihaz agent oynatma listesi sınırı 40 bağlantıdan 50 bağlantıya yükseltildi.
+- Hub backend reported ve desired playlist doğrulama sınırı 50 bağlantıya yükseltildi.
+- Web arayüzündeki playlist editörü 50 yayın satırı eklenmesine izin verecek şekilde güncellendi.
+- Kullanıcı 50 bağlantı sınırına ulaştığında arayüzde açıklayıcı bildirim gösterilmesi eklendi.
+- Ana proje dokümantasyonuna cihaz başına 50 yayın bağlantısı desteği işlendi.
+
+### Doğrulama
+
+- Cihaz modeliyle tam 50 bağlantılı playlist'in kabul edildiği test edildi.
+- Hub modeliyle tam 50 bağlantılı playlist'in kabul edildiği test edildi.
+- Hem cihaz hem Hub modellerinin 51 bağlantılı playlist'i reddettiği test edildi.
+- Toplam 37 otomatik test başarıyla tamamlandı.
