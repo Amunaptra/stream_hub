@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -19,6 +20,18 @@ def payload(device_id: str = "odroid-test-001") -> dict:
         "hostname": "stream-test-01",
         "agent_version": "0.1.0",
         "agent_port": 8787,
+        "reported_config": {
+            "revision": 4,
+            "default_seconds": 20,
+            "streams": [
+                {
+                    "id": "salon-1",
+                    "enabled": True,
+                    "seconds": 60,
+                    "url": "http://media/salon-1.m3u8",
+                }
+            ],
+        },
         "status": {
             "device_id": device_id,
             "hostname": "stream-test-01",
@@ -134,6 +147,42 @@ def test_missing_device_returns_not_found(tmp_path) -> None:
     assert response.status_code == 404
 
 
+def test_browser_session_uses_http_only_cookie(tmp_path) -> None:
+    client, _ = make_client(tmp_path)
+    with client:
+        denied = client.get("/api/v1/devices")
+        login = client.post("/api/v1/session", json={"token": ADMIN_TOKEN})
+        allowed = client.get("/api/v1/devices")
+        logout = client.delete("/api/v1/session")
+        denied_again = client.get("/api/v1/devices")
+
+    assert denied.status_code == 401
+    assert login.status_code == 200
+    assert "HttpOnly" in login.headers["set-cookie"]
+    assert "SameSite=strict" in login.headers["set-cookie"]
+    assert allowed.status_code == 200
+    assert logout.status_code == 200
+    assert denied_again.status_code == 401
+
+
+def test_hub_serves_local_dashboard(tmp_path) -> None:
+    settings = HubSettings(
+        database_file=tmp_path / "hub.sqlite3",
+        admin_token=ADMIN_TOKEN,
+        advertise_mdns=False,
+        ui_dir=Path(__file__).resolve().parents[1] / "hub" / "ui",
+    )
+    client = TestClient(create_app(settings))
+    with client:
+        root = client.get("/", follow_redirects=False)
+        page = client.get("/ui/")
+
+    assert root.status_code == 307
+    assert root.headers["location"] == "/ui/"
+    assert page.status_code == 200
+    assert "Stream Hub" in page.text
+
+
 def test_device_becomes_offline_after_heartbeat_deadline(tmp_path) -> None:
     client, app = make_client(tmp_path)
     admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
@@ -196,6 +245,21 @@ def test_approved_device_receives_config_and_reports_completion(tmp_path) -> Non
     assert result.status_code == 204
     assert inventory.json()[0]["desired_revision"] == 5
     assert inventory.json()[0]["config_sync_status"] == "applied"
+
+
+def test_hub_reads_reported_config_before_any_desired_config_exists(tmp_path) -> None:
+    client, _ = make_client(tmp_path)
+    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
+    with client:
+        client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
+        response = client.get(
+            "/api/v1/devices/odroid-test-001/config", headers=admin
+        )
+
+    assert response.status_code == 200
+    assert response.json()["revision"] == 4
+    assert response.json()["streams"][0]["id"] == "salon-1"
 
 
 def test_approved_device_receives_reboot_command_and_reports_result(tmp_path) -> None:

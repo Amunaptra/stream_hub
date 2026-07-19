@@ -38,6 +38,7 @@ class HubHeartbeatPayload(BaseModel):
     agent_version: str = Field(min_length=1, max_length=40)
     agent_port: int = Field(ge=1, le=65535)
     status: HubDeviceStatus
+    reported_config: "HubPlaylistConfig"
 
 
 class HubHeartbeatResponse(BaseModel):
@@ -76,7 +77,7 @@ class HubPlaylistDraft(BaseModel):
 
 
 class HubPlaylistConfig(HubPlaylistDraft):
-    revision: int = Field(ge=1)
+    revision: int = Field(ge=0)
 
 
 class HubCommand(BaseModel):
@@ -136,3 +137,11 @@ class HubCommandRecord(HubCommand):
     delivered_at: datetime | None = None
     completed_at: datetime | None = None
     result_message: str | None = None
+
+
+class AdminSessionRequest(BaseModel):
+    token: str
+
+
+class AdminSessionResponse(BaseModel):
+    ok: bool = True

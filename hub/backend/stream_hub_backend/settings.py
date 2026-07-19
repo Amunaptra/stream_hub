@@ -13,12 +13,15 @@ class HubSettings:
     advertise_mdns: bool = True
     offline_after_seconds: int = 30
     heartbeat_interval_seconds: float = 10.0
+    ui_dir: Path | None = None
+    secure_cookie: bool = False
 
     @classmethod
     def from_env(cls) -> "HubSettings":
         token = os.environ.get("STREAM_HUB_ADMIN_TOKEN", "").strip()
         if len(token) < 24:
             raise RuntimeError("STREAM_HUB_ADMIN_TOKEN must contain at least 24 characters")
+        default_ui = Path(__file__).resolve().parents[2] / "ui"
         return cls(
             database_file=Path(
                 os.environ.get("STREAM_HUB_DATABASE", "/var/lib/stream-hub/hub.sqlite3")
@@ -30,4 +33,6 @@ class HubSettings:
             heartbeat_interval_seconds=float(
                 os.environ.get("STREAM_HUB_HEARTBEAT_INTERVAL", "10")
             ),
+            ui_dir=Path(os.environ.get("STREAM_HUB_UI_DIR", str(default_ui))),
+            secure_cookie=os.environ.get("STREAM_HUB_SECURE_COOKIE", "0") == "1",
         )

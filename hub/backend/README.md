@@ -13,3 +13,20 @@ uvicorn stream_hub_backend.main:APP --host 0.0.0.0 --port 8788 --no-access-log
 ```
 
 Hub varsayılan olarak `_stream-hub._tcp.local.` servisini ilan eder. Test veya mDNS bulunmayan ortamda `STREAM_HUB_MDNS=0` kullanılabilir.
+
+## Web arayüzü
+
+Backend `hub/ui` dizinini `/ui/` altında sunar. Tarayıcı girişinde `STREAM_HUB_ADMIN_TOKEN` değeri kullanılır; doğrulama sonrasında token tarayıcıda saklanmaz ve 12 saat geçerli imzalı HttpOnly cookie oluşturulur.
+
+```text
+http://HUB-IP:8788/ui/
+```
+
+Dashboard şu ilk aşama işlevlerini içerir:
+
+- Online, offline, pending ve sorunlu cihaz listesi
+- CPU, RAM, disk, sıcaklık, log kullanımı ve uptime
+- Cihaz onayı
+- Cihazın reported veya desired playlist'ini düzenleme
+- Config'i yeni revision ile kaydetme ve gönderme
+- Player restart ve cihaz reboot komutları
