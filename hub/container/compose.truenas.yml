@@ -1,0 +1,64 @@
+services:
+  hub:
+    image: stream-hub:0.1.0
+    pull_policy: never
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      STREAM_HUB_ADMIN_TOKEN: ${STREAM_HUB_ADMIN_TOKEN:?administrator token required}
+      STREAM_HUB_DATABASE: /data/hub.sqlite3
+      STREAM_HUB_UI_DIR: /opt/stream-hub/ui
+      STREAM_HUB_PORT: "8788"
+      STREAM_HUB_MDNS: "0"
+      STREAM_HUB_SECURE_COOKIE: "0"
+    volumes:
+      - ${STREAM_HUB_DATA_PATH:?data path required}:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "7"
+
+  backup:
+    image: stream-hub:0.1.0
+    pull_policy: never
+    network_mode: none
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    command:
+      - /bin/sh
+      - -c
+      - while true; do python /opt/stream-hub/backup_sqlite.py; sleep 86400; done
+    environment:
+      STREAM_HUB_DATABASE: /data/hub.sqlite3
+      STREAM_HUB_BACKUP_DIR: /backups
+    volumes:
+      - ${STREAM_HUB_DATA_PATH:?data path required}:/data
+      - ${STREAM_HUB_BACKUP_PATH:?backup path required}:/backups
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "7"
+
+  mdns:
+    image: stream-hub:0.1.0
+    pull_policy: never
+    network_mode: host
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    command:
+      - avahi-publish-service
+      - Stream Hub
+      - _stream-hub._tcp
+      - "8788"
+      - path=/ui/
+    volumes:
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "7"

@@ -58,6 +58,9 @@ def test_release_builder_creates_independent_one_command_packages(tmp_path) -> N
         assert installer.mode == 0o755
         assert "STREAM_HUB_SOURCE_ROOT" in wrapper_text
         assert "stream-hub-server-test/hub/backend/pyproject.toml" in names
+        assert "stream-hub-server-test/hub/container/Dockerfile" in names
+        assert "stream-hub-server-test/hub/container/compose.truenas.yml" in names
+        assert "stream-hub-server-test/hub/container/deploy_truenas.py" in names
         assert "stream-hub-server-test/hub/ui/index.html" in names
         assert "stream-hub-server-test/hub/installer/backup_sqlite.py" in names
         assert "stream-hub-server-test/MANIFEST.sha256" in names
@@ -82,3 +85,27 @@ def test_installers_install_runtime_dependencies_and_accept_package_root() -> No
         assert dependency in hub
     assert '"${INSTALL_ROOT}/venv/bin/pip" install' in device
     assert '"${INSTALL_ROOT}/venv/bin/pip" install' in hub
+
+
+def test_truenas_container_is_non_root_persistent_and_bounded() -> None:
+    dockerfile = (ROOT / "hub" / "container" / "Dockerfile").read_text(encoding="utf-8")
+    compose = (ROOT / "hub" / "container" / "compose.truenas.yml").read_text(encoding="utf-8")
+
+    assert "USER 568:568" in dockerfile
+    assert "HEALTHCHECK" in dockerfile
+    assert "network_mode: host" in compose
+    assert 'STREAM_HUB_MDNS: "0"' in compose
+    assert "avahi-publish-service" in compose
+    assert "/run/dbus/system_bus_socket:/run/dbus/system_bus_socket" in compose
+    assert compose.count("disable: true") == 2
+    assert "STREAM_HUB_DATABASE: /data/hub.sqlite3" in compose
+    assert "backup_sqlite.py" in compose
+    assert "max-size: 10m" in compose
+    assert 'max-file: "7"' in compose
+
+    deployer = (ROOT / "hub" / "container" / "deploy_truenas.py").read_text(encoding="utf-8")
+    assert 'ensure_dataset(f"{args.pool}/stream-hub")' in deployer
+    assert 'os.chmod(token_file, 0o600)' in deployer
+    assert '"app.create"' in deployer
+    assert '"app.update"' in deployer
+    assert "wait_until_healthy()" in deployer

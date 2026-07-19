@@ -41,6 +41,16 @@ tar -xzf stream-hub-server-0.1.0.tar.gz && sudo ./stream-hub-server-0.1.0/instal
 
 Installer `apt` üzerinden `ca-certificates`, `curl`, `openssl`, Python ve venv paketlerini; Hub Python bağımlılıklarını ise izole venv içine otomatik kurar.
 
+### TrueNAS SCALE
+
+TrueNAS SCALE üzerinde host installer çalıştırılmaz. Hub arşivini açtıktan sonra Apps pool adı verilerek container deployment kullanılır:
+
+```bash
+sudo python3 hub/container/deploy_truenas.py --pool SENG
+```
+
+Bu komut Hub image'ını oluşturur, `<pool>/stream-hub` kalıcı dataset'ini hazırlar ve Hub'ı TrueNAS Apps içinde `stream-hub` adlı Custom App olarak oluşturur veya günceller. Hub, günlük backup ve mDNS ilanı ayrı container'larda çalışır.
+
 ## Veri koruma ve doğrulama
 
 - Odroid yeniden kurulumunda playlist ve cihaz kimliği korunur.

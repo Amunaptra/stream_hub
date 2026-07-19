@@ -26,6 +26,7 @@ PACKAGE_CONTENT = {
         "stream-hub-server",
         [
             "hub/backend",
+            "hub/container",
             "hub/installer",
             "hub/ui",
         ],
