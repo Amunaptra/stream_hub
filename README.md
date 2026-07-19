@@ -15,7 +15,7 @@ Projenin ilk hedefi 15 cihazı destekleyen bir MVP oluşturmaktır. Cihazlar Hub
 
 ## Güncel durum
 
-Cihaz çalışma katmanının ilk sürümü tamamlandı. Hub backend ve web arayüzü sıradaki geliştirme aşamasıdır.
+Cihaz çalışma katmanının ilk sürümü ile mDNS discovery, heartbeat ve Hub cihaz envanteri tamamlandı. Merkezi config/komut kuyruğu ve web arayüzü sıradaki geliştirme aşamasıdır.
 
 Yerel doğrulama:
 
@@ -25,6 +25,6 @@ python -m venv .venv
 .venv/bin/python -m pytest
 ```
 
-Odroid kurulum bilgisi için [device/README.md](device/README.md), API sözleşmesi için [docs/device-api-v1.md](docs/device-api-v1.md) dosyasına bakın.
+Odroid kurulum bilgisi için [device/README.md](device/README.md), cihaz API sözleşmesi için [docs/device-api-v1.md](docs/device-api-v1.md), keşif akışı için [docs/discovery-and-heartbeat.md](docs/discovery-and-heartbeat.md) dosyasına bakın.
 
 Proje kararları ve ilerleme kayıtları için [stream_hub_change_log.md](stream_hub_change_log.md) dosyasına bakın.

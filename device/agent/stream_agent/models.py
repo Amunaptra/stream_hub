@@ -96,3 +96,17 @@ class HealthItem(BaseModel):
     status_code: int | None = None
     latency_ms: int
     error: str | None = None
+
+
+class HeartbeatPayload(BaseModel):
+    device_id: str
+    hostname: str
+    agent_version: str
+    agent_port: int
+    status: DeviceStatus
+
+
+class HeartbeatResponse(BaseModel):
+    ok: bool
+    approved: bool
+    heartbeat_interval_seconds: float = 10.0
