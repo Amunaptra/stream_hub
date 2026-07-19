@@ -272,3 +272,19 @@ Otomatik testlerle tamamlandı; Linux systemd üzerinde canlı kurulum bekliyor.
 - Bir Odroid üzerinde MPV/HDMI/tty1 oynatma.
 - Gerçek reboot ve ağ kesintisi sonrası komut sonucu davranışı.
 - Hub installer ve yedekleme paketi `agent/hub-installer` dalına gönderildi ve draft PR `#5` açıldı; PR tabanı dashboard dalıdır.
+
+## 2026-07-19 - Yerel Hub arayüz önizlemesi
+
+### Durum
+
+Tamamlandı; canlı Odroid gerektirmeyen yerel demo Hub üzerinde doğrulandı.
+
+### Yapılanlar ve doğrulama
+
+- Hub backend yerel makinede mDNS kapalı olarak çalıştırıldı ve `/healthz` yanıtı doğrulandı.
+- Arayüz 15 gerçekçi sanal Odroid kaydıyla dolduruldu: 14 online, 1 offline ve 2 onay bekleyen cihaz senaryosu oluşturuldu.
+- Player servisi, yüksek disk, yüksek sıcaklık ve log kullanım sınırı sağlık uyarıları arayüzde görünür hale getirildi.
+- Yönetici token oturumu ile giriş yapılarak filo özetinin, filtrelerin ve cihaz listesinin yüklendiği doğrulandı.
+- Cihaz detay çekmecesinde IP, CPU/RAM, disk, sıcaklık, log kullanımı, uptime ve revision bilgilerinin gösterildiği doğrulandı.
+- Oynatma listesi düzenleme, `Kaydet ve gönder`, `Player restart` ve `Cihazı reboot et` kontrollerinin görünür olduğu doğrulandı.
+- Yerel yönetim paneli Codex uygulamasının tarayıcısında kullanıcıya açık bırakıldı.
