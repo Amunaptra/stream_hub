@@ -234,3 +234,41 @@ Yerel Hub uygulaması olarak tamamlandı; canlı cihaz verisiyle görsel doğrul
 2. SQLite yedekleme ve Hub log saklama politikasını eklemek.
 3. Tek makinede simüle Hub + çoklu sanal cihaz smoke testi yapmak.
 4. Donanım uygun olduğunda bir Odroid ile canlı kabul testi yapmak.
+
+## 2026-07-19 - Hub installer, yedekleme ve 15 cihaz smoke testi
+
+### Durum
+
+Otomatik testlerle tamamlandı; Linux systemd üzerinde canlı kurulum bekliyor.
+
+### Eklenenler
+
+- Debian/Ubuntu Hub makinesi için tekrar çalıştırılabilir `hub/installer/install.sh` eklendi.
+- Hub uygulaması `/opt/stream-hub`, SQLite verisi `/var/lib/stream-hub` ve ayarlar `/etc/stream-hub` olarak ayrıldı.
+- Hub servisi özel `stream-hub` sistem kullanıcısı ve grubu altında çalışacak şekilde hazırlandı.
+- İlk kurulumda 256-bit rastgele admin token üretimi eklendi.
+- Tekrar kurulumda admin token, Hub ayarları ve SQLite veritabanının korunması sağlandı.
+- Hub için systemd hardening, otomatik restart ve erişim sınırları eklendi.
+- Hub journal kayıtları da 7 gün, toplam 1 GB ve en az 2 GB boş alan politikasıyla sınırlandı.
+- SQLite online backup API'sini kullanan günlük yedekleme betiği eklendi.
+- Günlük yedekleme için systemd oneshot servis ve persistent timer eklendi.
+- Yedekler en fazla 7 gün ve 7 dosya olacak şekilde sınırlandı.
+- Installer sonunda Hub servis, health endpoint ve UI erişim kontrolü eklendi.
+
+### Doğrulama
+
+- Toplam 34 otomatik test başarılı.
+- SQLite veritabanı açıkken tutarlı yedek oluşturulduğu ve yedekten kayıt okunabildiği doğrulandı.
+- Fazla yedeklerin 7 dosya sınırına indirildiği doğrulandı.
+- Installer'ın mevcut env/veri dizinini silmediği, parola sıfırlamadığı ve log sınırlarını içerdiği test edildi.
+- 15 farklı cihazın benzersiz token ve IP ile Hub'a heartbeat göndermesi simüle edildi.
+- Hub envanterinde 15 cihazın tamamının online olarak listelendiği doğrulandı.
+- Toplam kaynak ağacında Python compile, JavaScript syntax, whitespace ve LF kontrolleri başarılı.
+
+### Bekleyen canlı doğrulamalar
+
+- Hub installer'ın gerçek Debian/Ubuntu systemd makinesinde çalıştırılması.
+- Gerçek ağda mDNS multicast discovery.
+- Bir Odroid üzerinde MPV/HDMI/tty1 oynatma.
+- Gerçek reboot ve ağ kesintisi sonrası komut sonucu davranışı.
+- Hub installer ve yedekleme paketi `agent/hub-installer` dalına gönderildi ve draft PR `#5` açıldı; PR tabanı dashboard dalıdır.

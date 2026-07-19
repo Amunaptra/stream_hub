@@ -30,3 +30,15 @@ Dashboard şu ilk aşama işlevlerini içerir:
 - Cihazın reported veya desired playlist'ini düzenleme
 - Config'i yeni revision ile kaydetme ve gönderme
 - Player restart ve cihaz reboot komutları
+
+## Hub kurulumu
+
+Debian/Ubuntu tabanlı kalıcı Hub makinesinde repo kökünden:
+
+```bash
+sudo ./hub/installer/install.sh
+```
+
+Installer uygulamayı `/opt/stream-hub`, veritabanını `/var/lib/stream-hub` ve yönetici ayarlarını `/etc/stream-hub/hub.env` altında tutar. Tekrar kurulumda veritabanı ve admin token korunur.
+
+SQLite veritabanı her gün `/var/backups/stream-hub` altına tutarlı backup API'siyle yedeklenir. En fazla 7 günlük/7 adet yedek tutulur.

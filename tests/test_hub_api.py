@@ -291,3 +291,28 @@ def test_approved_device_receives_reboot_command_and_reports_result(tmp_path) ->
     assert heartbeat.json()["commands"][0]["command"] == "reboot"
     assert result.status_code == 204
     assert commands.json()[0]["status"] == "completed"
+
+
+def test_inventory_handles_fifteen_discovered_devices(tmp_path) -> None:
+    client, _ = make_client(tmp_path)
+    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    with client:
+        for index in range(15):
+            device_id = f"odroid-test-{index:03d}"
+            item = payload(device_id)
+            item["hostname"] = f"stream-{index + 1:02d}"
+            item["status"]["hostname"] = item["hostname"]
+            item["status"]["ip_addresses"] = [f"192.168.1.{50 + index}"]
+            response = client.post(
+                "/api/v1/devices/heartbeat",
+                headers={
+                    "Authorization": f"Bearer device-token-{index:02d}-with-enough-unique-characters"
+                },
+                json=item,
+            )
+            assert response.status_code == 200
+        inventory = client.get("/api/v1/devices", headers=admin)
+
+    assert inventory.status_code == 200
+    assert len(inventory.json()) == 15
+    assert all(device["online"] for device in inventory.json())
