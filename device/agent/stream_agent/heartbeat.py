@@ -65,7 +65,81 @@ class HeartbeatWorker:
             json=self.payload().model_dump(mode="json"),
         )
         response.raise_for_status()
-        return HeartbeatResponse.model_validate(response.json())
+        result = HeartbeatResponse.model_validate(response.json())
+        if result.approved:
+            await self.process_response(client, hub_url, result)
+        return result
+
+    async def _report_config(
+        self,
+        client: httpx.AsyncClient,
+        hub_url: str,
+        revision: int,
+        ok: bool,
+        message: str,
+    ) -> None:
+        response = await client.post(
+            f"{hub_url.rstrip('/')}/api/v1/devices/{self.identity.device_id}/config-result",
+            headers={"Authorization": f"Bearer {self.identity.token}"},
+            json={"revision": revision, "ok": ok, "message": message[:500]},
+        )
+        response.raise_for_status()
+
+    async def _report_command(
+        self,
+        client: httpx.AsyncClient,
+        hub_url: str,
+        command_id: str,
+        ok: bool,
+        message: str,
+    ) -> None:
+        response = await client.post(
+            f"{hub_url.rstrip('/')}/api/v1/devices/{self.identity.device_id}/commands/{command_id}/result",
+            headers={"Authorization": f"Bearer {self.identity.token}"},
+            json={"ok": ok, "message": message[:500]},
+        )
+        response.raise_for_status()
+
+    async def process_response(
+        self,
+        client: httpx.AsyncClient,
+        hub_url: str,
+        result: HeartbeatResponse,
+    ) -> None:
+        if result.desired_config:
+            config = result.desired_config
+            try:
+                _, changed = self.store.apply_playlist(config)
+                if changed:
+                    restarted, message = self.controller.restart_player()
+                    if not restarted:
+                        self.store.restore_playlist_backup()
+                        raise RuntimeError(message)
+                await self._report_config(
+                    client, hub_url, config.revision, True, "configuration applied"
+                )
+            except Exception as exc:
+                await self._report_config(
+                    client,
+                    hub_url,
+                    config.revision,
+                    False,
+                    f"configuration failed: {type(exc).__name__}",
+                )
+
+        for command in result.commands:
+            cached = self.store.command_result(command.command_id)
+            if cached:
+                ok, message = cached
+            elif command.command == "player_restart":
+                ok, message = self.controller.restart_player()
+                self.store.save_command_result(command.command_id, ok, message)
+            else:
+                ok, message = self.controller.reboot()
+                self.store.save_command_result(command.command_id, ok, message)
+            await self._report_command(
+                client, hub_url, command.command_id, ok, message
+            )
 
     async def run(self) -> None:
         timeout = httpx.Timeout(5.0, connect=2.0)

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class HubPlayerState(BaseModel):
@@ -42,6 +44,58 @@ class HubHeartbeatResponse(BaseModel):
     ok: bool = True
     approved: bool
     heartbeat_interval_seconds: float
+    desired_config: "HubPlaylistConfig | None" = None
+    commands: list["HubCommand"] = Field(default_factory=list)
+
+
+class HubStreamItem(BaseModel):
+    id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.-]+$")
+    enabled: bool = True
+    seconds: int = Field(default=20, ge=0, le=86_400)
+    url: str = Field(min_length=8, max_length=2_048)
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        value = value.strip()
+        if not value.lower().startswith(("http://", "https://")):
+            raise ValueError("stream URL must use http or https")
+        return value
+
+
+class HubPlaylistDraft(BaseModel):
+    default_seconds: int = Field(default=20, ge=0, le=86_400)
+    streams: list[HubStreamItem] = Field(default_factory=list, max_length=40)
+
+    @model_validator(mode="after")
+    def unique_stream_ids(self) -> "HubPlaylistDraft":
+        ids = [stream.id for stream in self.streams]
+        if len(ids) != len(set(ids)):
+            raise ValueError("stream IDs must be unique")
+        return self
+
+
+class HubPlaylistConfig(HubPlaylistDraft):
+    revision: int = Field(ge=1)
+
+
+class HubCommand(BaseModel):
+    command_id: str
+    command: Literal["player_restart", "reboot"]
+    created_at: datetime
+
+
+class HubCommandRequest(BaseModel):
+    command: Literal["player_restart", "reboot"]
+
+
+class HubCommandResult(BaseModel):
+    ok: bool
+    message: str = Field(max_length=500)
+
+
+class HubConfigResult(HubCommandResult):
+    revision: int = Field(ge=1)
 
 
 class DeviceRecord(BaseModel):
@@ -55,6 +109,8 @@ class DeviceRecord(BaseModel):
     current_stream_id: str | None = None
     current_stream_url: str | None = None
     config_revision: int
+    desired_revision: int | None = None
+    config_sync_status: str | None = None
     cpu_percent: float | None = None
     memory_percent: float | None = None
     disk_percent: float
@@ -72,3 +128,11 @@ class ApprovalResult(BaseModel):
     ok: bool
     device_id: str
     approved: bool
+
+
+class HubCommandRecord(HubCommand):
+    device_id: str
+    status: str
+    delivered_at: datetime | None = None
+    completed_at: datetime | None = None
+    result_message: str | None = None

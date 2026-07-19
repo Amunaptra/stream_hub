@@ -153,3 +153,42 @@ Otomatik testlerle tamamlandı; canlı ağ ve Odroid testi kullanıcıda uygun t
 2. Onaylı cihazlara config, player restart ve reboot komut kuyruğu eklemek.
 3. Komut sonucu/ack mekanizmasını tamamlamak.
 4. Merkezi cihaz listesi web arayüzünü oluşturmak.
+
+## 2026-07-19 - Merkezi config ve komut kuyruğu 0.1.0
+
+### Durum
+
+Otomatik ve simüle uçtan uca testlerle tamamlandı; gerçek cihaz uygulaması bekliyor.
+
+### Eklenenler
+
+- Hub üzerinde her cihaz için desired config ve cihazın bildirdiği reported revision ayrıldı.
+- Playlist içerik değişikliklerinde revision değerinin Hub tarafından otomatik artırılması eklendi.
+- Onaylanmamış cihaza config veya sistem komutu verilmesi engellendi.
+- Desired config heartbeat yanıtıyla onaylı cihaza teslim edildi.
+- Cihazın config'i atomik uygulaması, player restart yapması ve sonucu Hub'a bildirmesi eklendi.
+- Config uygulaması başarısız olduğunda cihazın önceki playlist'e dönmesi ve Hub'ın durumu `failed` olarak kaydetmesi sağlandı.
+- Hub envanterine desired revision ve `pending/delivered/applied/failed` config senkronizasyon durumu eklendi.
+- Player restart ve reboot için kalıcı SQLite komut kuyruğu eklendi.
+- Cihazın komut sonucunu Hub'a bildirerek kuyruğu `completed/failed` durumuna geçirmesi eklendi.
+- Ağ cevabı kaybolan `delivered` komutların tekrar teslim edilmesi sağlandı.
+- Tekrar teslim edilen reboot/restart komutlarının yeniden çalıştırılmasını önlemek için cihazda son 100 komutun kalıcı sonucu saklandı.
+- Cihaz ve komut sonucu endpoint'lerinde cihaz kimliği ile benzersiz token eşleşmesi yeniden doğrulandı.
+
+### Doğrulama
+
+- Toplam 28 otomatik test başarılı.
+- Pending cihazın config almasının engellenmesi test edildi.
+- Onay, desired config revision üretimi, heartbeat teslimi ve config sonucu uçtan uca doğrulandı.
+- Reboot komutunun kuyruğa alınması, teslim edilmesi ve tamamlanması doğrulandı.
+- Aynı komutun ağ nedeniyle yeniden tesliminde cihaz işleminin yalnızca bir kez çalıştığı doğrulandı.
+- Config ve komut sonuçlarının yanlış cihaz token'ıyla değiştirilememesi sağlandı.
+- Python compile ve whitespace kontrolleri başarılı.
+- Merkezi config ve komut paketi `agent/hub-commands` dalına gönderildi ve draft PR `#3` açıldı; PR tabanı discovery/heartbeat dalıdır.
+
+### Sonraki çalışma
+
+1. Merkezi cihaz listesi web arayüzünü oluşturmak.
+2. Cihaz detayında playlist editörü, Send, restart ve reboot aksiyonlarını bağlamak.
+3. Sağlık durumlarını renkli liste ve uyarı eşikleriyle göstermek.
+4. Hub kurulumu ve servis paketini hazırlamak.
