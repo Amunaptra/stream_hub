@@ -1,3 +1,4 @@
+.gitattributes text eol=lf
 * text=auto
 *.sh text eol=lf
 *.service text eol=lf
@@ -8,6 +9,7 @@
 *.html text eol=lf
 *.json text eol=lf
 *.md text eol=lf
+*.toml text eol=lf
+*.txt text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
-

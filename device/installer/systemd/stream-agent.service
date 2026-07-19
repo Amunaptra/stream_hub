@@ -1,0 +1,27 @@
+[Unit]
+Description=Stream Hub device agent
+After=network-online.target stream-player.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stream-agent
+Group=stream-hub
+WorkingDirectory=/opt/stream-hub-device
+Environment=STREAM_HUB_DATA_DIR=/etc/stream-hub
+Environment=STREAM_HUB_RUNTIME_DIR=/run/stream-hub
+Environment=STREAM_HUB_AGENT_PORT=8787
+ExecStart=/opt/stream-hub-device/venv/bin/uvicorn stream_agent.main:APP --host 0.0.0.0 --port 8787 --no-access-log
+Restart=always
+RestartSec=3
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/etc/stream-hub /run/stream-hub
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

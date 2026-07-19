@@ -1,0 +1,37 @@
+[Unit]
+Description=Stream Hub HLS player
+After=network-online.target
+Wants=network-online.target
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=odroid
+Group=stream-hub
+WorkingDirectory=/opt/stream-hub-device
+Environment=STREAM_HUB_PLAYLIST=/etc/stream-hub/playlist.json
+Environment=STREAM_HUB_RUNTIME_DIR=/run/stream-hub
+Environment=STREAM_HUB_LOG_LEVEL=INFO
+RuntimeDirectory=stream-hub
+RuntimeDirectoryMode=0770
+RuntimeDirectoryPreserve=yes
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=no
+ExecStart=/opt/stream-hub-device/venv/bin/python /opt/stream-hub-device/device/player/stream_player.py
+Restart=always
+RestartSec=3
+TimeoutStopSec=10
+KillMode=control-group
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=read-only
+ProtectSystem=strict
+ReadWritePaths=/run/stream-hub
+
+[Install]
+WantedBy=multi-user.target

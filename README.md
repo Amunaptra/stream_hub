@@ -4,15 +4,27 @@ Stream Hub, ağdaki Odroid tabanlı HLS yayın oynatıcılarını merkezi bir we
 
 Projenin ilk hedefi 15 cihazı destekleyen bir MVP oluşturmaktır. Cihazlar Hub olmasa da son geçerli oynatma listesiyle bağımsız çalışmaya devam eder.
 
-## Planlanan bileşenler
+## Bileşenler
 
-- `device/agent`: Hub iletişimi, cihaz API'si ve sağlık telemetrisi
-- `device/player`: HLS oynatma döngüsü ve yerel çalışma durumu
-- `device/installer`: Odroid kurulum ve systemd tanımları
+- `device/agent`: Sürümlü cihaz API'si, güvenli config ve sağlık telemetrisi
+- `device/player`: Hub'dan bağımsız HLS oynatma döngüsü
+- `device/installer`: Veri korumalı Odroid kurulumu, systemd ve journal sınırları
 - `hub/backend`: Cihaz envanteri, heartbeat, komut ve config yönetimi
 - `hub/ui`: Merkezi yönetim paneli
-- `shared`: Ortak API modelleri ve protokol tanımları
-- `tests`: Cihaz ve Hub doğrulama testleri
+- `tests`: Cihaz modelleri, depolama ve API doğrulama testleri
+
+## Güncel durum
+
+Cihaz çalışma katmanının ilk sürümü tamamlandı. Hub backend ve web arayüzü sıradaki geliştirme aşamasıdır.
+
+Yerel doğrulama:
+
+```bash
+python -m venv .venv
+.venv/bin/pip install -e ".[test]"
+.venv/bin/python -m pytest
+```
+
+Odroid kurulum bilgisi için [device/README.md](device/README.md), API sözleşmesi için [docs/device-api-v1.md](docs/device-api-v1.md) dosyasına bakın.
 
 Proje kararları ve ilerleme kayıtları için [stream_hub_change_log.md](stream_hub_change_log.md) dosyasına bakın.
-
