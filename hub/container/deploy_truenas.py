@@ -46,7 +46,15 @@ def ensure_dataset(name: str) -> Path:
     return mountpoint
 
 
-def ensure_storage(dataset: Path) -> tuple[Path, Path, str]:
+def protected_value(path: Path, value_factory) -> str:
+    if not path.exists():
+        path.write_text(value_factory() + "\n", encoding="utf-8")
+    os.chown(path, 0, 0)
+    os.chmod(path, 0o600)
+    return path.read_text(encoding="utf-8").strip()
+
+
+def ensure_storage(dataset: Path) -> tuple[Path, Path, str, str]:
     data = dataset / "data"
     backups = dataset / "backups"
     deployment = dataset / "deployment"
@@ -56,19 +64,26 @@ def ensure_storage(dataset: Path) -> tuple[Path, Path, str]:
         os.chmod(directory, 0o750)
     deployment.mkdir(parents=True, exist_ok=True)
     os.chmod(deployment, 0o700)
-    token_file = deployment / "admin-token"
-    if not token_file.exists():
-        token_file.write_text(secrets.token_hex(32) + "\n", encoding="utf-8")
-    os.chown(token_file, 0, 0)
-    os.chmod(token_file, 0o600)
-    return data, backups, token_file.read_text(encoding="utf-8").strip()
+    username = protected_value(deployment / "admin-username", lambda: "admin")
+    password = protected_value(
+        deployment / "admin-password", lambda: secrets.token_urlsafe(18)
+    )
+    legacy_token = deployment / "admin-token"
+    if legacy_token.exists():
+        legacy_token.unlink()
+    return data, backups, username, password
 
 
-def render_compose(template: Path, data: Path, backups: Path, token: str) -> str:
+def render_compose(
+    template: Path, data: Path, backups: Path, username: str, password: str
+) -> str:
     compose = template.read_text(encoding="utf-8")
     return (
         compose.replace(
-            "${STREAM_HUB_ADMIN_TOKEN:?administrator token required}", token
+            "${STREAM_HUB_ADMIN_USERNAME:?administrator username required}", username
+        )
+        .replace(
+            "${STREAM_HUB_ADMIN_PASSWORD:?administrator password required}", password
         )
         .replace("${STREAM_HUB_DATA_PATH:?data path required}", str(data))
         .replace("${STREAM_HUB_BACKUP_PATH:?backup path required}", str(backups))
@@ -126,7 +141,7 @@ def main() -> None:
 
     root = Path(__file__).resolve().parents[2]
     dataset = ensure_dataset(f"{args.pool}/stream-hub")
-    data, backups, token = ensure_storage(dataset)
+    data, backups, username, password = ensure_storage(dataset)
 
     run(
         [
@@ -141,7 +156,11 @@ def main() -> None:
         ]
     )
     compose = render_compose(
-        root / "hub/container/compose.truenas.yml", data, backups, token
+        root / "hub/container/compose.truenas.yml",
+        data,
+        backups,
+        username,
+        password,
     )
     deployment_dir = dataset / "deployment"
     rendered = deployment_dir / "compose.yml"
@@ -152,7 +171,8 @@ def main() -> None:
     wait_until_healthy()
     print("Stream Hub deployment is healthy")
     print("Dashboard: http://<TRUENAS-IP>:8788/ui/")
-    print(f"Administrator token file: {deployment_dir / 'admin-token'}")
+    print(f"Administrator username file: {deployment_dir / 'admin-username'}")
+    print(f"Administrator password file: {deployment_dir / 'admin-password'}")
 
 
 if __name__ == "__main__":

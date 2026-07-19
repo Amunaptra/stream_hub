@@ -365,49 +365,35 @@ Tamamlandı; Odroid ve merkezi Hub için ayrı dağıtım arşivleri üretildi.
 - Arşiv SHA-256 değerlerinin `SHA256SUMS` ile eşleştiği doğrulandı.
 - Toplam 40 otomatik test başarıyla tamamlandı.
 
-## 2026-07-19 - TrueNAS SCALE canlı Hub deployment
+## 2026-07-19 - Kullanıcı adı ve parola tabanlı Hub yönetimi
 
 ### Durum
 
-Tamamlandı; merkezi Hub `100.125.248.73` adresindeki TrueNAS SCALE sunucusunda canlı çalışıyor.
-
-### Hedef ortam
-
-- TrueNAS SCALE sürümü: `25.04.0-MASTER-20250418-234215`.
-- Apps/Docker durumu: `RUNNING`.
-- Apps pool: `SENG`; deployment öncesi yaklaşık 5.8 TB boş alan.
-- Hub portu `8788/tcp` deployment öncesinde boş olarak doğrulandı.
+Tamamlandı; yönetici token girişi kullanıcı adı ve parola tabanlı hesaba dönüştürüldü.
 
 ### Yapılanlar
 
-- Hub için Python 3.13 tabanlı, root olmayan `568:568` kullanıcısıyla çalışan container image eklendi.
-- TrueNAS Apps uyumlu Docker Compose ve tekrar çalıştırılabilir `deploy_truenas.py` deployment aracı eklendi.
-- `SENG/stream-hub` kalıcı ZFS dataset'i oluşturuldu.
-- SQLite veri, backup ve root-only deployment/token dizinleri ayrıldı.
-- Hub image'ı TrueNAS üzerinde build edildi ve `stream-hub` Custom App olarak kaydedildi.
-- Hub servisi host network üzerinde `8788/tcp` ile çalıştırıldı.
-- Günlük SQLite online backup işlemi ayrı `backup` sidecar'a taşındı.
-- Container JSON logları servis başına 10 MB x 7 dosyayla sınırlandı.
-- TrueNAS host Avahi servisiyle `5353/UDP` çakışmasını önlemek için Hub dahili mDNS kapatıldı.
-- Host D-Bus üzerinden `_stream-hub._tcp` ilanı yapan root olmayan `mdns` sidecar eklendi.
-- Backup ve mDNS sidecar'larında ana Hub healthcheck'inin yanlış uygulanması engellendi.
-- TrueNAS Hub kurulum yöntemi bağımsız server paketine ve dokümantasyona eklendi.
+- Web giriş ekranına kullanıcı adı ve parola alanları eklendi.
+- Yönetici hesabı SQLite içinde kalıcı hale getirildi.
+- Parolalar rastgele salt ve `scrypt` kullanılarak özetleniyor; düz metin parola veritabanına yazılmıyor.
+- Oturum imzalama anahtarı paroladan ayrıldı.
+- Panel üst menüsüne kullanıcı adı ve parola değişikliği sağlayan **Hesap** ekranı eklendi.
+- Giriş bilgisi değiştiğinde mevcut yönetici oturumlarının tamamının geçersiz olması sağlandı.
+- Yönetici otomasyonları için HTTP Basic kullanıcı adı/parola desteği eklendi.
+- Odroid cihazlarının benzersiz Bearer token doğrulaması değiştirilmeden korundu.
+- Debian/Ubuntu ve TrueNAS installer'ları ilk yönetici hesabını güvenli şekilde oluşturacak biçimde güncellendi.
+- Eski kurulumlarda SQLite verisi ve cihaz envanteri korunarak otomatik hesap tablosu oluşturulması sağlandı.
 
-### Canlı doğrulama
+### Doğrulama
 
-- TrueNAS Apps içinde `stream-hub` durumu `RUNNING` ve container sayısı 3 olarak doğrulandı.
-- `hub`, `backup` ve `mdns` container'larının çalıştığı doğrulandı.
-- Hub container Docker health durumu `healthy`.
-- TrueNAS içinden ve Tailscale adresinden `/healthz` HTTP 200 döndü.
-- Tailscale üzerinden `/ui/` HTTP 200 döndü ve Stream Hub arayüzü yüklendi.
-- Yönetici cookie oturumu ve `/api/v1/devices` API erişimi HTTP 200 ile doğrulandı.
-- Yeni canlı Hub envanterinin başlangıçta 0 cihaz içerdiği doğrulandı.
-- İlk SQLite yedekleri `/mnt/SENG/stream-hub/backups` altında başarıyla üretildi.
-- mDNS ilanı `CRSENG.local`, `192.168.100.142`, port `8788`, `path=/ui/` olarak Avahi üzerinden bulundu.
-- Toplam 41 otomatik test başarılı; Python compile ve whitespace kontrolleri geçti.
+- Doğru ve yanlış kullanıcı adı/parola girişleri test edildi.
+- HttpOnly ve SameSite cookie davranışının korunduğu doğrulandı.
+- Yönetici kullanıcı adı/parola değişimi ve eski bilgilerin reddedilmesi test edildi.
+- Korunan yönetici API endpoint'lerinde cookie ve HTTP Basic doğrulaması test edildi.
+- Toplam 42 otomatik test başarıyla tamamlandı.
+- Python compile ve JavaScript syntax kontrolleri geçti.
 
 ### Güvenlik
 
-- TrueNAS ve Hub parolaları/token'ları repoya veya changelog'a yazılmadı.
-- Hub yönetici token'ı `/mnt/SENG/stream-hub/deployment/admin-token` altında root-only `0600` izinle saklanıyor.
-- Render edilmiş Compose dosyası aynı root-only deployment dizininde `0600` izinle saklanıyor.
+- Repo, paket ve changelog içine gerçek parola veya credential değeri yazılmadı.
+- Canlı deployment ve bağlantı ayrıntıları yalnızca yerel changelog kaydında tutulur.

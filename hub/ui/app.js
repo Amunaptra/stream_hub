@@ -74,11 +74,16 @@ function renderLogin(message = "") {
   const wrap = el("main", "login-wrap");
   const card = el("section", "login-card");
   card.append(el("div", "eyebrow", "Yerel yönetim"), el("h1", "", "Stream Hub"), el("p", "subtitle", "Odroid yayın cihazlarınızı tek noktadan yönetin."));
-  const field = el("div", "field");
-  field.append(el("label", "", "Hub yönetici token’ı"));
-  const input = document.createElement("input");
-  input.type = "password"; input.autocomplete = "current-password"; input.placeholder = "Yönetici token’ını girin";
-  field.append(input);
+  const usernameField = el("div", "field");
+  usernameField.append(el("label", "", "Kullanıcı adı"));
+  const username = document.createElement("input");
+  username.type = "text"; username.autocomplete = "username"; username.placeholder = "Kullanıcı adınız";
+  usernameField.append(username);
+  const passwordField = el("div", "field");
+  passwordField.append(el("label", "", "Parola"));
+  const password = document.createElement("input");
+  password.type = "password"; password.autocomplete = "current-password"; password.placeholder = "Parolanız";
+  passwordField.append(password);
   const button = el("button", "btn primary", "Giriş yap");
   button.style.marginTop = "14px";
   button.style.width = "100%";
@@ -87,15 +92,16 @@ function renderLogin(message = "") {
   async function login() {
     error.hidden = true; button.disabled = true;
     try {
-      await api("/api/v1/session", { method: "POST", body: JSON.stringify({ token: input.value }) });
+      await api("/api/v1/session", { method: "POST", body: JSON.stringify({ username: username.value.trim(), password: password.value }) });
       await loadDevices();
     } catch (e) {
-      error.textContent = "Token doğrulanamadı."; error.hidden = false;
+      error.textContent = "Kullanıcı adı veya parola hatalı."; error.hidden = false;
     } finally { button.disabled = false; }
   }
   button.onclick = login;
-  input.addEventListener("keydown", event => { if (event.key === "Enter") login(); });
-  card.append(field, button, error); wrap.append(card); app.append(wrap); input.focus();
+  username.addEventListener("keydown", event => { if (event.key === "Enter") password.focus(); });
+  password.addEventListener("keydown", event => { if (event.key === "Enter") login(); });
+  card.append(usernameField, passwordField, button, error); wrap.append(card); app.append(wrap); username.focus();
 }
 
 function renderDashboard() {
@@ -103,7 +109,7 @@ function renderDashboard() {
     <div class="shell">
       <header class="topbar"><div class="topbar-inner">
         <div class="brand"><span class="brand-mark"></span><span>Stream Hub</span></div>
-        <div class="top-actions"><button class="btn ghost" id="refresh">Yenile</button><button class="btn ghost" id="logout">Çıkış</button></div>
+        <div class="top-actions"><button class="btn ghost" id="refresh">Yenile</button><button class="btn ghost" id="account">Hesap</button><button class="btn ghost" id="logout">Çıkış</button></div>
       </div></header>
       <main class="content">
         <div class="eyebrow">Merkezi yayın kontrolü</div>
@@ -115,8 +121,42 @@ function renderDashboard() {
       </main>
     </div>`;
   document.querySelector("#refresh").onclick = () => loadDevices(true);
+  document.querySelector("#account").onclick = openAccount;
   document.querySelector("#logout").onclick = async () => { await api("/api/v1/session", { method: "DELETE" }); renderLogin(); };
   renderSummary(); renderFilters(); renderDeviceList();
+}
+
+async function openAccount() {
+  let profile;
+  try { profile = await api("/api/v1/admin/profile"); }
+  catch (e) { toast(`Hesap bilgisi alınamadı: ${e.message}`); return; }
+  const backdrop = el("div", "drawer-backdrop");
+  const card = el("section", "account-card");
+  const head = el("div", "drawer-head");
+  const title = el("div"); title.append(el("div", "eyebrow", "Yönetici hesabı"), el("h2", "", "Giriş bilgilerini değiştir"));
+  const close = el("button", "btn ghost", "Kapat"); close.onclick = () => backdrop.remove(); head.append(title, close); card.append(head);
+  const usernameField = el("div", "field"); usernameField.append(el("label", "", "Kullanıcı adı"));
+  const username = document.createElement("input"); username.value = profile.username; username.autocomplete = "username"; usernameField.append(username);
+  const currentField = el("div", "field"); currentField.append(el("label", "", "Mevcut parola"));
+  const current = document.createElement("input"); current.type = "password"; current.autocomplete = "current-password"; currentField.append(current);
+  const passwordField = el("div", "field"); passwordField.append(el("label", "", "Yeni parola (en az 8 karakter)"));
+  const password = document.createElement("input"); password.type = "password"; password.autocomplete = "new-password"; passwordField.append(password);
+  const repeatField = el("div", "field"); repeatField.append(el("label", "", "Yeni parola tekrar"));
+  const repeat = document.createElement("input"); repeat.type = "password"; repeat.autocomplete = "new-password"; repeatField.append(repeat);
+  const error = el("div", "error"); error.hidden = true;
+  const save = el("button", "btn primary", "Bilgileri değiştir"); save.style.marginTop = "18px"; save.style.width = "100%";
+  save.onclick = async () => {
+    error.hidden = true;
+    if (password.value !== repeat.value) { error.textContent = "Yeni parolalar eşleşmiyor."; error.hidden = false; return; }
+    save.disabled = true;
+    try {
+      await api("/api/v1/admin/credentials", { method: "PUT", body: JSON.stringify({ current_password: current.value, username: username.value.trim(), new_password: password.value }) });
+      backdrop.remove(); renderLogin(); toast("Bilgiler değiştirildi. Yeni bilgilerinizle giriş yapın.");
+    } catch (e) { error.textContent = e.message; error.hidden = false; save.disabled = false; }
+  };
+  card.append(usernameField, currentField, passwordField, repeatField, save, error);
+  backdrop.onclick = event => { if (event.target === backdrop) backdrop.remove(); };
+  backdrop.append(card); document.body.append(backdrop); current.focus();
 }
 
 function renderSummary() {

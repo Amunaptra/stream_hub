@@ -38,15 +38,20 @@ install -d -o root -g "${SERVICE_USER}" -m 0750 "${CONFIG_DIR}"
 
 log "Preserving or creating Hub administrator configuration"
 if [[ ! -f "${ENV_FILE}" ]]; then
-  ADMIN_TOKEN="$(openssl rand -hex 32)"
+  ADMIN_PASSWORD="$(openssl rand -base64 18 | tr -d '\n')"
   cat >"${ENV_FILE}" <<EOF
-STREAM_HUB_ADMIN_TOKEN=${ADMIN_TOKEN}
+STREAM_HUB_ADMIN_USERNAME=admin
+STREAM_HUB_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 STREAM_HUB_DATABASE=${DATA_DIR}/hub.sqlite3
 STREAM_HUB_UI_DIR=${INSTALL_ROOT}/hub/ui
 STREAM_HUB_PORT=8788
 STREAM_HUB_MDNS=1
 STREAM_HUB_SECURE_COOKIE=0
 EOF
+fi
+if ! grep -q '^STREAM_HUB_ADMIN_USERNAME=' "${ENV_FILE}"; then
+  ADMIN_PASSWORD="$(openssl rand -base64 18 | tr -d '\n')"
+  printf '\nSTREAM_HUB_ADMIN_USERNAME=admin\nSTREAM_HUB_ADMIN_PASSWORD=%s\n' "${ADMIN_PASSWORD}" >>"${ENV_FILE}"
 fi
 chown root:"${SERVICE_USER}" "${ENV_FILE}"
 chmod 0640 "${ENV_FILE}"
@@ -87,4 +92,4 @@ curl --fail --silent http://127.0.0.1:8788/ui/ >/dev/null || fail "Hub UI check 
 
 IP="$(hostname -I | awk '{print $1}')"
 printf '\nInstallation complete. Dashboard: http://%s:8788/ui/\n' "${IP}"
-printf 'Administrator token: grep STREAM_HUB_ADMIN_TOKEN %s\n' "${ENV_FILE}"
+printf 'Administrator login: grep STREAM_HUB_ADMIN_ %s\n' "${ENV_FILE}"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -9,7 +10,12 @@ from stream_hub_backend.api import create_app
 from stream_hub_backend.settings import HubSettings
 
 
-ADMIN_TOKEN = "admin-token-with-at-least-24-characters"
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "secure-test-password"
+ADMIN = {
+    "Authorization": "Basic "
+    + base64.b64encode(f"{ADMIN_USERNAME}:{ADMIN_PASSWORD}".encode()).decode()
+}
 DEVICE_TOKEN = "device-token-with-at-least-thirty-two-characters"
 
 
@@ -72,7 +78,8 @@ def payload(device_id: str = "odroid-test-001") -> dict:
 def make_client(tmp_path):
     settings = HubSettings(
         database_file=tmp_path / "hub.sqlite3",
-        admin_token=ADMIN_TOKEN,
+        admin_username=ADMIN_USERNAME,
+        admin_password=ADMIN_PASSWORD,
         advertise_mdns=False,
     )
     app = create_app(settings)
@@ -90,7 +97,7 @@ def test_unknown_device_is_auto_discovered_as_pending(tmp_path) -> None:
         unauthorized = client.get("/api/v1/devices")
         devices = client.get(
             "/api/v1/devices",
-            headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
+            headers=ADMIN,
         )
 
     assert heartbeat.status_code == 200
@@ -104,7 +111,7 @@ def test_unknown_device_is_auto_discovered_as_pending(tmp_path) -> None:
 
 def test_device_can_be_approved_and_next_heartbeat_reports_approval(tmp_path) -> None:
     client, _ = make_client(tmp_path)
-    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    admin = ADMIN
     device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
     with client:
         client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
@@ -154,7 +161,7 @@ def test_missing_device_returns_not_found(tmp_path) -> None:
     with client:
         response = client.get(
             "/api/v1/devices/missing",
-            headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
+            headers=ADMIN,
         )
     assert response.status_code == 404
 
@@ -163,12 +170,20 @@ def test_browser_session_uses_http_only_cookie(tmp_path) -> None:
     client, _ = make_client(tmp_path)
     with client:
         denied = client.get("/api/v1/devices")
-        login = client.post("/api/v1/session", json={"token": ADMIN_TOKEN})
+        bad_login = client.post(
+            "/api/v1/session",
+            json={"username": ADMIN_USERNAME, "password": "wrong-password"},
+        )
+        login = client.post(
+            "/api/v1/session",
+            json={"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD},
+        )
         allowed = client.get("/api/v1/devices")
         logout = client.delete("/api/v1/session")
         denied_again = client.get("/api/v1/devices")
 
     assert denied.status_code == 401
+    assert bad_login.status_code == 401
     assert login.status_code == 200
     assert "HttpOnly" in login.headers["set-cookie"]
     assert "SameSite=strict" in login.headers["set-cookie"]
@@ -177,10 +192,51 @@ def test_browser_session_uses_http_only_cookie(tmp_path) -> None:
     assert denied_again.status_code == 401
 
 
+def test_admin_can_change_username_and_password(tmp_path) -> None:
+    client, _ = make_client(tmp_path)
+    with client:
+        client.post(
+            "/api/v1/session",
+            json={"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD},
+        )
+        profile = client.get("/api/v1/admin/profile")
+        wrong = client.put(
+            "/api/v1/admin/credentials",
+            json={
+                "current_password": "incorrect-password",
+                "username": "operator",
+                "new_password": "new-secure-password",
+            },
+        )
+        changed = client.put(
+            "/api/v1/admin/credentials",
+            json={
+                "current_password": ADMIN_PASSWORD,
+                "username": "operator",
+                "new_password": "new-secure-password",
+            },
+        )
+        old_login = client.post(
+            "/api/v1/session",
+            json={"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD},
+        )
+        new_login = client.post(
+            "/api/v1/session",
+            json={"username": "operator", "password": "new-secure-password"},
+        )
+
+    assert profile.json() == {"username": ADMIN_USERNAME}
+    assert wrong.status_code == 403
+    assert changed.status_code == 200
+    assert old_login.status_code == 401
+    assert new_login.status_code == 200
+
+
 def test_hub_serves_local_dashboard(tmp_path) -> None:
     settings = HubSettings(
         database_file=tmp_path / "hub.sqlite3",
-        admin_token=ADMIN_TOKEN,
+        admin_username=ADMIN_USERNAME,
+        admin_password=ADMIN_PASSWORD,
         advertise_mdns=False,
         ui_dir=Path(__file__).resolve().parents[1] / "hub" / "ui",
     )
@@ -197,7 +253,7 @@ def test_hub_serves_local_dashboard(tmp_path) -> None:
 
 def test_device_becomes_offline_after_heartbeat_deadline(tmp_path) -> None:
     client, app = make_client(tmp_path)
-    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    admin = ADMIN
     device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
     with client:
         client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
@@ -215,7 +271,7 @@ def test_device_becomes_offline_after_heartbeat_deadline(tmp_path) -> None:
 
 def test_approved_device_receives_config_and_reports_completion(tmp_path) -> None:
     client, _ = make_client(tmp_path)
-    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    admin = ADMIN
     device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
     with client:
         client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
@@ -261,7 +317,7 @@ def test_approved_device_receives_config_and_reports_completion(tmp_path) -> Non
 
 def test_hub_reads_reported_config_before_any_desired_config_exists(tmp_path) -> None:
     client, _ = make_client(tmp_path)
-    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    admin = ADMIN
     device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
     with client:
         client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
@@ -276,7 +332,7 @@ def test_hub_reads_reported_config_before_any_desired_config_exists(tmp_path) ->
 
 def test_hub_stores_and_returns_stream_health(tmp_path) -> None:
     client, _ = make_client(tmp_path)
-    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    admin = ADMIN
     device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
     with client:
         client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
@@ -297,7 +353,7 @@ def test_hub_stores_and_returns_stream_health(tmp_path) -> None:
 
 def test_approved_device_receives_reboot_command_and_reports_result(tmp_path) -> None:
     client, _ = make_client(tmp_path)
-    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    admin = ADMIN
     device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
     with client:
         client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
@@ -328,7 +384,7 @@ def test_approved_device_receives_reboot_command_and_reports_result(tmp_path) ->
 
 def test_inventory_handles_fifteen_discovered_devices(tmp_path) -> None:
     client, _ = make_client(tmp_path)
-    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    admin = ADMIN
     with client:
         for index in range(15):
             device_id = f"odroid-test-{index:03d}"

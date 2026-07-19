@@ -31,6 +31,12 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _password_hash(password: str, salt: bytes) -> str:
+    return hashlib.scrypt(
+        password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=32
+    ).hex()
+
+
 class HubDatabase:
     def __init__(self, path: Path):
         self.path = path
@@ -43,7 +49,7 @@ class HubDatabase:
         connection.execute("PRAGMA busy_timeout=5000")
         return connection
 
-    def initialize(self) -> None:
+    def initialize(self, admin_username: str, admin_password: str) -> None:
         with self.connect() as connection:
             connection.execute(
                 """
@@ -124,6 +130,87 @@ class HubDatabase:
                     PRIMARY KEY (device_id, stream_id)
                 )
                 """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS admin_credentials (
+                    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                    username TEXT NOT NULL UNIQUE,
+                    password_salt TEXT NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    session_secret TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            existing = connection.execute(
+                "SELECT 1 FROM admin_credentials WHERE singleton = 1"
+            ).fetchone()
+            if not existing:
+                salt = secrets.token_bytes(16)
+                connection.execute(
+                    """
+                    INSERT INTO admin_credentials (
+                        singleton, username, password_salt, password_hash,
+                        session_secret, updated_at
+                    ) VALUES (1, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        admin_username,
+                        salt.hex(),
+                        _password_hash(admin_password, salt),
+                        secrets.token_hex(32),
+                        datetime.now(timezone.utc).isoformat(),
+                    ),
+                )
+
+    def authenticate_admin(self, username: str, password: str) -> bool:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT username, password_salt, password_hash
+                FROM admin_credentials WHERE singleton = 1
+                """
+            ).fetchone()
+        if not row or not secrets.compare_digest(username, row["username"]):
+            return False
+        supplied = _password_hash(password, bytes.fromhex(row["password_salt"]))
+        return secrets.compare_digest(supplied, row["password_hash"])
+
+    def admin_session_identity(self) -> tuple[str, str]:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT username, session_secret
+                FROM admin_credentials WHERE singleton = 1
+                """
+            ).fetchone()
+        if not row:
+            raise RuntimeError("administrator credentials are not initialized")
+        return row["username"], row["session_secret"]
+
+    def update_admin_credentials(
+        self, current_password: str, username: str, new_password: str
+    ) -> None:
+        current_username, _ = self.admin_session_identity()
+        if not self.authenticate_admin(current_username, current_password):
+            raise PermissionError("current password is incorrect")
+        salt = secrets.token_bytes(16)
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE admin_credentials
+                SET username = ?, password_salt = ?, password_hash = ?,
+                    session_secret = ?, updated_at = ?
+                WHERE singleton = 1
+                """,
+                (
+                    username,
+                    salt.hex(),
+                    _password_hash(new_password, salt),
+                    secrets.token_hex(32),
+                    datetime.now(timezone.utc).isoformat(),
+                ),
             )
 
     def upsert_heartbeat(self, payload: HubHeartbeatPayload, token: str) -> bool:

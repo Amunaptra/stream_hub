@@ -105,7 +105,11 @@ def test_truenas_container_is_non_root_persistent_and_bounded() -> None:
 
     deployer = (ROOT / "hub" / "container" / "deploy_truenas.py").read_text(encoding="utf-8")
     assert 'ensure_dataset(f"{args.pool}/stream-hub")' in deployer
-    assert 'os.chmod(token_file, 0o600)' in deployer
+    assert 'deployment / "admin-username"' in deployer
+    assert 'deployment / "admin-password"' in deployer
+    assert 'deployment / "admin-token"' in deployer
+    assert "legacy_token.unlink()" in deployer
+    assert "os.chmod(path, 0o600)" in deployer
     assert '"app.create"' in deployer
     assert '"app.update"' in deployer
     assert "wait_until_healthy()" in deployer

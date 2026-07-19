@@ -8,6 +8,6 @@ Bu paket merkezi Hub API'sini, web arayüzünü, systemd servisini, sınırlı j
 sudo ./install.sh
 ```
 
-Kurulum mevcut `/etc/stream-hub/hub.env`, yönetici token'ı ve `/var/lib/stream-hub/hub.sqlite3` veritabanını korur. Kurulum sonunda Hub servisi, `healthz` ve web arayüzü doğrulanır.
+Kurulum mevcut `/etc/stream-hub/hub.env`, yönetici hesabı ve `/var/lib/stream-hub/hub.sqlite3` veritabanını korur. Kurulum sonunda Hub servisi, `healthz` ve web arayüzü doğrulanır.
 
-Panel adresi ve yönetici token'ını okuma komutu installer sonunda yazdırılır.
+Panel adresi ve ilk yönetici kullanıcı adı/parolasını okuma komutu installer sonunda yazdırılır. Giriş bilgileri daha sonra paneldeki **Hesap** düğmesinden değiştirilebilir.

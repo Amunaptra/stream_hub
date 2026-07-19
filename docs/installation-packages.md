@@ -54,7 +54,7 @@ Bu komut Hub image'ını oluşturur, `<pool>/stream-hub` kalıcı dataset'ini ha
 ## Veri koruma ve doğrulama
 
 - Odroid yeniden kurulumunda playlist ve cihaz kimliği korunur.
-- Hub yeniden kurulumunda yönetici token'ı, ayarlar ve SQLite veritabanı korunur.
+- Hub yeniden kurulumunda yönetici hesabı, ayarlar ve SQLite veritabanı korunur.
 - Her iki installer systemd servislerini etkinleştirir ve kurulum sonunda health endpoint'ini kontrol eder.
 - Hub installer ayrıca web arayüzünü ve günlük SQLite backup timer'ını doğrular.
 - Paketler şu anda Debian/Ubuntu tabanlı systemd sistemlerini hedefler.

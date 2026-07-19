@@ -17,7 +17,8 @@ docker build -f hub/container/Dockerfile -t stream-hub:0.1.0 .
 
 `compose.truenas.yml` dosyası çalıştırılmadan önce şu değişkenleri gerektirir:
 
-- `STREAM_HUB_ADMIN_TOKEN`
+- `STREAM_HUB_ADMIN_USERNAME`
+- `STREAM_HUB_ADMIN_PASSWORD`
 - `STREAM_HUB_DATA_PATH`
 - `STREAM_HUB_BACKUP_PATH`
 
@@ -29,4 +30,4 @@ Repo kaynakları TrueNAS üzerinde bulunduğunda otomatik deployment:
 sudo python3 hub/container/deploy_truenas.py --pool SENG
 ```
 
-Bu komut `SENG/stream-hub` dataset'ini, kalıcı veri/yedek dizinlerini ve yönetici token'ını mevcutsa korur; image'ı yeniden oluşturur ve Custom App'i oluşturur veya günceller.
+Bu komut `SENG/stream-hub` dataset'ini, kalıcı veri/yedek dizinlerini ve ilk yönetici giriş bilgilerini mevcutsa korur; image'ı yeniden oluşturur ve Custom App'i oluşturur veya günceller. İlk kullanıcı adı ve parola root-only `deployment/admin-username` ve `deployment/admin-password` dosyalarından okunabilir. Daha sonra giriş bilgileri paneldeki **Hesap** düğmesinden değiştirilir; parola SQLite içinde salt'lı `scrypt` özeti olarak saklanır.

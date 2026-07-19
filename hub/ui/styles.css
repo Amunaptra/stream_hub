@@ -70,6 +70,8 @@ h1 { margin: 8px 0 4px; font-size: clamp(28px, 4vw, 46px); letter-spacing: -.045
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
 .login-card { width: min(430px,100%); background: rgba(13,25,35,.96); border: 1px solid var(--line); border-radius: 22px; padding: 28px; box-shadow: 0 28px 80px rgba(0,0,0,.38); }
 .login-card h1 { font-size: 32px; }
+.account-card { width: min(500px,calc(100% - 32px)); margin: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 20px; padding: 24px; box-shadow: 0 28px 80px rgba(0,0,0,.5); }
+.account-card h2 { margin: 4px 0 0; }
 .field { display: grid; gap: 7px; margin-top: 18px; }
 .field label { color: var(--muted); font-size: 12px; font-weight: 700; }
 input { width: 100%; color: var(--text); background: #08141d; border: 1px solid var(--line); border-radius: 11px; padding: 11px 12px; outline: none; }
