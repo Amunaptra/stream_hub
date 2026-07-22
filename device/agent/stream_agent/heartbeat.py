@@ -53,6 +53,7 @@ class HeartbeatWorker:
             agent_version=__version__,
             agent_port=self.settings.agent_port,
             status=status,
+            reported_config=self.store.load_playlist(),
         )
 
     async def send_once(self, client: httpx.AsyncClient) -> HeartbeatResponse | None:

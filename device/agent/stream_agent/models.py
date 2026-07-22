@@ -104,6 +104,7 @@ class HeartbeatPayload(BaseModel):
     agent_version: str
     agent_port: int
     status: DeviceStatus
+    reported_config: PlaylistConfig
 
 
 class HeartbeatResponse(BaseModel):

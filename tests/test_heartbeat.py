@@ -83,6 +83,7 @@ def test_heartbeat_uses_unique_device_token_and_reports_status(tmp_path) -> None
     assert captured["url"].endswith("/api/v1/devices/heartbeat")
     assert captured["authorization"] == f"Bearer {identity.token}"
     assert captured["payload"]["device_id"] == identity.device_id
+    assert captured["payload"]["reported_config"]["revision"] == 0
     assert captured["payload"]["status"]["disk_free_bytes"] == 6_000_000_000
 
 

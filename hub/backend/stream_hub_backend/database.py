@@ -86,6 +86,16 @@ class HubDatabase:
             )
             connection.execute(
                 """
+                CREATE TABLE IF NOT EXISTS reported_configs (
+                    device_id TEXT PRIMARY KEY REFERENCES devices(device_id) ON DELETE CASCADE,
+                    revision INTEGER NOT NULL,
+                    config_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
                 CREATE TABLE IF NOT EXISTS commands (
                     command_id TEXT PRIMARY KEY,
                     device_id TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
@@ -169,6 +179,22 @@ class HubDatabase:
             row = connection.execute(
                 "SELECT approved FROM devices WHERE device_id = ?", (payload.device_id,)
             ).fetchone()
+            connection.execute(
+                """
+                INSERT INTO reported_configs (device_id, revision, config_json, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(device_id) DO UPDATE SET
+                    revision=excluded.revision,
+                    config_json=excluded.config_json,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    payload.device_id,
+                    payload.reported_config.revision,
+                    payload.reported_config.model_dump_json(),
+                    now,
+                ),
+            )
             return bool(row["approved"])
 
     def authenticate_device(self, device_id: str, token: str) -> None:
@@ -239,6 +265,27 @@ class HubDatabase:
                 (device_id,),
             )
         return HubPlaylistConfig.model_validate_json(row["config_json"])
+
+    def effective_config(self, device_id: str) -> HubPlaylistConfig:
+        with self.connect() as connection:
+            exists = connection.execute(
+                "SELECT 1 FROM devices WHERE device_id = ?", (device_id,)
+            ).fetchone()
+            if not exists:
+                raise DeviceNotFoundError(device_id)
+            desired = connection.execute(
+                "SELECT config_json FROM desired_configs WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()
+            if desired:
+                return HubPlaylistConfig.model_validate_json(desired["config_json"])
+            reported = connection.execute(
+                "SELECT config_json FROM reported_configs WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()
+        if not reported:
+            return HubPlaylistConfig(revision=0)
+        return HubPlaylistConfig.model_validate_json(reported["config_json"])
 
     def complete_config(self, device_id: str, revision: int, ok: bool, message: str) -> None:
         with self.connect() as connection:

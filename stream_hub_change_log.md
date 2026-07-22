@@ -192,3 +192,45 @@ Otomatik ve simüle uçtan uca testlerle tamamlandı; gerçek cihaz uygulaması 
 2. Cihaz detayında playlist editörü, Send, restart ve reboot aksiyonlarını bağlamak.
 3. Sağlık durumlarını renkli liste ve uyarı eşikleriyle göstermek.
 4. Hub kurulumu ve servis paketini hazırlamak.
+
+## 2026-07-19 - Merkezi Hub web arayüzü 0.1.0
+
+### Durum
+
+Yerel Hub uygulaması olarak tamamlandı; canlı cihaz verisiyle görsel doğrulama bekliyor.
+
+### Eklenenler
+
+- FastAPI Hub içine `/ui/` altında sunulan merkezi yönetim dashboard'u eklendi.
+- Admin token'ın JavaScript veya browser storage içinde tutulmaması için 12 saatlik imzalı HttpOnly oturum cookie'si eklendi.
+- Oturum cookie'sinde `SameSite=Strict` kullanıldı ve HTTPS kurulumları için Secure seçeneği eklendi.
+- Toplam, online, onay bekleyen ve sorunlu cihaz özet kartları eklendi.
+- Tümü, online, pending ve sorunlu cihaz filtreleri eklendi.
+- Cihaz listesinde aktif yayın, player, disk sağlığı ve config senkronizasyon durumu gösterildi.
+- Offline, player hatası, yüksek disk kullanımı, yüksek sıcaklık, yüksek log kullanımı ve config sorunu uyarıları eklendi.
+- Cihaz detay panelinde IP, CPU, RAM, boş disk, sıcaklık, log kullanımı, uptime ve revision bilgileri eklendi.
+- Otomatik bulunan pending cihazı arayüzden onaylama akışı eklendi.
+- Cihazın heartbeat ile bildirdiği gerçek playlist'in Hub veritabanında saklanması eklendi.
+- Reported playlist'i görüntüleme, en fazla 40 satır düzenleme ve yeni revision ile `Kaydet ve gönder` akışı eklendi.
+- Player restart ve kullanıcı onaylı reboot butonları komut kuyruğuna bağlandı.
+- Dashboard 10 saniyede bir cihaz listesini yenileyecek şekilde ayarlandı.
+- Masaüstü, tablet ve dar ekranlar için responsive görünüm eklendi.
+- Sites yönergeleri gereği kalıcı cihaz verisi browser storage yerine mevcut SQLite backend'de tutuldu; yerel cihaz ağı gereksinimi nedeniyle cloud hosting yapılmadı.
+
+### Doğrulama
+
+- Toplam 31 otomatik test başarılı.
+- Admin login, HttpOnly/SameSite cookie, logout ve yetkisiz erişim test edildi.
+- Hub root yönlendirmesi ve `/ui/` statik dashboard sunumu doğrulandı.
+- Cihaz heartbeat'inde reported playlist ile status revision eşleşmesi zorunlu hale getirildi.
+- Reported playlist'in Hub tarafından okunması test edildi.
+- JavaScript sözdizimi, Python compile ve whitespace kontrolleri başarılı.
+- Kullanıcı istemediği ve canlı cihaz bulunmadığı için browser tabanlı görsel QA yapılmadı.
+- Merkezi dashboard `agent/hub-ui` dalına gönderildi ve draft PR `#4` açıldı; PR tabanı merkezi config/komut dalıdır.
+
+### Sonraki çalışma
+
+1. Hub installer ve systemd servisini hazırlamak.
+2. SQLite yedekleme ve Hub log saklama politikasını eklemek.
+3. Tek makinede simüle Hub + çoklu sanal cihaz smoke testi yapmak.
+4. Donanım uygun olduğunda bir Odroid ile canlı kabul testi yapmak.
