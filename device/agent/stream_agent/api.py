@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import secrets
 import socket
+from contextlib import asynccontextmanager, suppress
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
@@ -9,6 +11,7 @@ from fastapi.responses import PlainTextResponse
 
 from . import __version__
 from .health import check_playlist
+from .heartbeat import HeartbeatWorker
 from .models import (
     CommandResult,
     ConfigApplyResult,
@@ -21,6 +24,7 @@ from .models import (
 from .settings import Settings
 from .storage import DeviceStore, RevisionConflict
 from .system import SystemController
+from .telemetry import collect_status
 
 
 def create_app(
@@ -32,11 +36,28 @@ def create_app(
     identity = store.load_or_create_identity()
     controller = controller or SystemController(settings)
 
-    app = FastAPI(title="Stream Hub Device Agent", version=__version__)
+    heartbeat = HeartbeatWorker(settings, identity, store, controller)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        task = asyncio.create_task(heartbeat.run(), name="hub-heartbeat")
+        try:
+            yield
+        finally:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+    app = FastAPI(
+        title="Stream Hub Device Agent",
+        version=__version__,
+        lifespan=lifespan,
+    )
     app.state.settings = settings
     app.state.store = store
     app.state.identity = identity
     app.state.controller = controller
+    app.state.heartbeat = heartbeat
 
     def require_device_token(
         authorization: Annotated[str | None, Header()] = None,
@@ -122,23 +143,7 @@ def create_app(
         dependencies=authenticated,
     )
     def get_status() -> DeviceStatus:
-        playlist = store.load_playlist()
-        disk_percent, disk_free = controller.disk_usage(settings.data_dir)
-        return DeviceStatus(
-            device_id=identity.device_id,
-            hostname=socket.gethostname(),
-            ip_addresses=controller.ip_addresses(),
-            player_service=controller.player_service_status(),
-            player=controller.read_player_state(),
-            config_revision=playlist.revision,
-            cpu_percent=controller.cpu_percent(),
-            memory_percent=controller.memory_percent(),
-            disk_percent=disk_percent,
-            disk_free_bytes=disk_free,
-            log_usage_bytes=controller.journal_usage_bytes(),
-            uptime_seconds=controller.uptime_seconds(),
-            temperature_c=controller.temperature_c(),
-        )
+        return collect_status(settings, identity, store, controller)
 
     @app.get(
         "/api/v1/streams/health",

@@ -113,3 +113,43 @@ Tamamlandı; gerçek Odroid kurulumu henüz yapılmadı.
 2. mDNS Hub discovery ve cihaz heartbeat protokolünü eklemek.
 3. Hub backend cihaz envanteri ve durum veritabanını oluşturmak.
 4. İlk merkezi cihaz listesi ekranını hazırlamak.
+
+## 2026-07-19 - Discovery, heartbeat ve Hub envanteri 0.1.0
+
+### Durum
+
+Otomatik testlerle tamamlandı; canlı ağ ve Odroid testi kullanıcıda uygun test ortamı bulunmadığı için ertelendi.
+
+### Eklenenler
+
+- Hub için `_stream-hub._tcp.local.` mDNS ilanı eklendi.
+- Odroid agent'a otomatik Hub keşfi ve ayarlanabilir sabit Hub URL fallback'i eklendi.
+- Cihazların varsayılan 10 saniye aralıkla sistem ve player telemetrisi göndermesi sağlandı.
+- Heartbeat hata logları yalnızca hata durumu değiştiğinde yazılarak log fırtınası önlendi.
+- Hub backend için ayrı Python paketi ve çalışma ayarları oluşturuldu.
+- 15 cihazlık ilk hedef için WAL modunda SQLite cihaz envanteri eklendi.
+- İlk heartbeat ile cihazın otomatik olarak `pending` durumda kaydolması sağlandı.
+- Yeni cihazların merkezi komut alabilmesi için açık Hub onay akışı eklendi.
+- Cihaz token'ları Hub veritabanında düz metin yerine SHA-256 özet olarak saklandı.
+- Aynı cihaz kimliğiyle farklı token gönderilmesi reddedildi.
+- Hub yönetim API'leri en az 24 karakterli ayrı admin token ile korundu.
+- Heartbeat içindeki üst ve alt cihaz kimliklerinin eşleşmesi zorunlu hale getirildi.
+- Son heartbeat 30 saniyeyi geçtiğinde cihazın offline görünmesi eklendi.
+- mDNS kullanılamadığında Hub'ın kapanmaması ve API'nin çalışmaya devam etmesi sağlandı.
+
+### Doğrulama
+
+- Toplam 24 otomatik test başarılı.
+- Cihazdan Hub'a heartbeat gövdesi ve benzersiz Bearer token gönderimi simüle edildi.
+- Otomatik pending kayıt, cihaz onayı, yanlış token reddi ve offline zaman aşımı test edildi.
+- Python compile, whitespace ve LF satır sonu kontrolleri başarılı.
+- FastAPI TestClient bağımlılığından gelen bir deprecation uyarısı bulunuyor; test sonuçlarını etkilemiyor.
+- Gerçek multicast/mDNS, Odroid systemd ve MPV davranışı henüz canlı donanımda doğrulanmadı.
+- Discovery ve Hub envanteri `agent/hub-discovery` dalına gönderildi ve draft PR `#2` açıldı; PR tabanı bağımlı cihaz çekirdeği dalıdır.
+
+### Sonraki çalışma
+
+1. Hub desired config ve cihaz reported config revision yönetimini eklemek.
+2. Onaylı cihazlara config, player restart ve reboot komut kuyruğu eklemek.
+3. Komut sonucu/ack mekanizmasını tamamlamak.
+4. Merkezi cihaz listesi web arayüzünü oluşturmak.
