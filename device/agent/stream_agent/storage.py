@@ -96,3 +96,27 @@ class DeviceStore:
         restored = PlaylistConfig.model_validate_json(backup.read_text(encoding="utf-8"))
         _atomic_json_write(path, restored.model_dump(mode="json"))
         return restored
+
+    def command_result(self, command_id: str) -> tuple[bool, str] | None:
+        path = self.settings.command_results_file
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            result = data.get(command_id)
+            if not result:
+                return None
+            return bool(result["ok"]), str(result["message"])
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+
+    def save_command_result(self, command_id: str, ok: bool, message: str) -> None:
+        path = self.settings.command_results_file
+        try:
+            data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except (OSError, ValueError):
+            data = {}
+        data[command_id] = {"ok": ok, "message": message[:500]}
+        if len(data) > 100:
+            data = dict(list(data.items())[-100:])
+        _atomic_json_write(path, data)

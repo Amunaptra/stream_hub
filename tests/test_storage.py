@@ -74,3 +74,13 @@ def test_backup_can_be_restored(tmp_path) -> None:
 
     assert restored.revision == 0
     assert store.load_playlist().revision == 0
+
+
+def test_command_results_are_persistent_and_idempotent(tmp_path) -> None:
+    store = make_store(tmp_path)
+
+    store.save_command_result("command-1", True, "reboot requested")
+    reloaded = make_store(tmp_path)
+
+    assert reloaded.command_result("command-1") == (True, "reboot requested")
+    assert reloaded.command_result("missing") is None

@@ -42,3 +42,7 @@ class Settings:
     @property
     def player_state_file(self) -> Path:
         return self.runtime_dir / "player-state.json"
+
+    @property
+    def command_results_file(self) -> Path:
+        return self.data_dir / "command-results.json"

@@ -110,3 +110,11 @@ class HeartbeatResponse(BaseModel):
     ok: bool
     approved: bool
     heartbeat_interval_seconds: float = 10.0
+    desired_config: PlaylistConfig | None = None
+    commands: list["DeviceCommand"] = Field(default_factory=list)
+
+
+class DeviceCommand(BaseModel):
+    command_id: str
+    command: Literal["player_restart", "reboot"]
+    created_at: datetime

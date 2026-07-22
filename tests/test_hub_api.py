@@ -150,3 +150,80 @@ def test_device_becomes_offline_after_heartbeat_deadline(tmp_path) -> None:
 
     assert response.status_code == 200
     assert response.json()[0]["online"] is False
+
+
+def test_approved_device_receives_config_and_reports_completion(tmp_path) -> None:
+    client, _ = make_client(tmp_path)
+    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
+    with client:
+        client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
+        denied = client.put(
+            "/api/v1/devices/odroid-test-001/config",
+            headers=admin,
+            json={"default_seconds": 20, "streams": []},
+        )
+        client.post("/api/v1/devices/odroid-test-001/approve", headers=admin)
+        desired = client.put(
+            "/api/v1/devices/odroid-test-001/config",
+            headers=admin,
+            json={
+                "default_seconds": 20,
+                "streams": [
+                    {
+                        "id": "new-stream",
+                        "enabled": True,
+                        "seconds": 30,
+                        "url": "http://media/new.m3u8",
+                    }
+                ],
+            },
+        )
+        heartbeat = client.post(
+            "/api/v1/devices/heartbeat", headers=device, json=payload()
+        )
+        result = client.post(
+            "/api/v1/devices/odroid-test-001/config-result",
+            headers=device,
+            json={"revision": desired.json()["revision"], "ok": True, "message": "applied"},
+        )
+        inventory = client.get("/api/v1/devices", headers=admin)
+
+    assert denied.status_code == 403
+    assert desired.status_code == 200
+    assert desired.json()["revision"] == 5
+    assert heartbeat.json()["desired_config"]["revision"] == 5
+    assert result.status_code == 204
+    assert inventory.json()[0]["desired_revision"] == 5
+    assert inventory.json()[0]["config_sync_status"] == "applied"
+
+
+def test_approved_device_receives_reboot_command_and_reports_result(tmp_path) -> None:
+    client, _ = make_client(tmp_path)
+    admin = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+    device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
+    with client:
+        client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
+        client.post("/api/v1/devices/odroid-test-001/approve", headers=admin)
+        queued = client.post(
+            "/api/v1/devices/odroid-test-001/commands",
+            headers=admin,
+            json={"command": "reboot"},
+        )
+        heartbeat = client.post(
+            "/api/v1/devices/heartbeat", headers=device, json=payload()
+        )
+        command_id = queued.json()["command_id"]
+        result = client.post(
+            f"/api/v1/devices/odroid-test-001/commands/{command_id}/result",
+            headers=device,
+            json={"ok": True, "message": "reboot requested"},
+        )
+        commands = client.get(
+            "/api/v1/devices/odroid-test-001/commands", headers=admin
+        )
+
+    assert queued.status_code == 200
+    assert heartbeat.json()["commands"][0]["command"] == "reboot"
+    assert result.status_code == 204
+    assert commands.json()[0]["status"] == "completed"

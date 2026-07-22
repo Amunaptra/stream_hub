@@ -4,10 +4,18 @@ import hashlib
 import json
 import secrets
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .models import DeviceRecord, HubHeartbeatPayload
+from .models import (
+    DeviceRecord,
+    HubCommand,
+    HubCommandRecord,
+    HubHeartbeatPayload,
+    HubPlaylistConfig,
+    HubPlaylistDraft,
+)
 
 
 class DeviceAuthenticationError(ValueError):
@@ -61,6 +69,32 @@ class HubDatabase:
                     first_seen TEXT NOT NULL,
                     last_seen TEXT NOT NULL,
                     raw_status_json TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS desired_configs (
+                    device_id TEXT PRIMARY KEY REFERENCES devices(device_id) ON DELETE CASCADE,
+                    revision INTEGER NOT NULL,
+                    config_json TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    result_message TEXT,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS commands (
+                    command_id TEXT PRIMARY KEY,
+                    device_id TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+                    command TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    delivered_at TEXT,
+                    completed_at TEXT,
+                    result_message TEXT
                 )
                 """
             )
@@ -137,6 +171,190 @@ class HubDatabase:
             ).fetchone()
             return bool(row["approved"])
 
+    def authenticate_device(self, device_id: str, token: str) -> None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT token_hash FROM devices WHERE device_id = ?", (device_id,)
+            ).fetchone()
+        if not row or not secrets.compare_digest(row["token_hash"], _token_hash(token)):
+            raise DeviceAuthenticationError("device token mismatch")
+
+    def require_approved(self, device_id: str, connection: sqlite3.Connection) -> sqlite3.Row:
+        row = connection.execute(
+            "SELECT approved, config_revision FROM devices WHERE device_id = ?",
+            (device_id,),
+        ).fetchone()
+        if not row:
+            raise DeviceNotFoundError(device_id)
+        if not row["approved"]:
+            raise PermissionError("device approval required")
+        return row
+
+    def set_desired_config(
+        self, device_id: str, draft: HubPlaylistDraft
+    ) -> HubPlaylistConfig:
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connect() as connection:
+            device = self.require_approved(device_id, connection)
+            previous = connection.execute(
+                "SELECT revision FROM desired_configs WHERE device_id = ?", (device_id,)
+            ).fetchone()
+            revision = max(
+                int(device["config_revision"]),
+                int(previous["revision"]) if previous else 0,
+            ) + 1
+            config = HubPlaylistConfig(revision=revision, **draft.model_dump())
+            connection.execute(
+                """
+                INSERT INTO desired_configs (
+                    device_id, revision, config_json, status, result_message, updated_at
+                ) VALUES (?, ?, ?, 'pending', NULL, ?)
+                ON CONFLICT(device_id) DO UPDATE SET
+                    revision=excluded.revision,
+                    config_json=excluded.config_json,
+                    status='pending',
+                    result_message=NULL,
+                    updated_at=excluded.updated_at
+                """,
+                (device_id, revision, config.model_dump_json(), now),
+            )
+        return config
+
+    def desired_config_for(self, device_id: str, reported_revision: int) -> HubPlaylistConfig | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT revision, config_json, status FROM desired_configs WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()
+            if not row or row["status"] in {"applied", "failed"}:
+                return None
+            if int(row["revision"]) <= reported_revision:
+                connection.execute(
+                    "UPDATE desired_configs SET status = 'applied' WHERE device_id = ?",
+                    (device_id,),
+                )
+                return None
+            connection.execute(
+                "UPDATE desired_configs SET status = 'delivered' WHERE device_id = ?",
+                (device_id,),
+            )
+        return HubPlaylistConfig.model_validate_json(row["config_json"])
+
+    def complete_config(self, device_id: str, revision: int, ok: bool, message: str) -> None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT revision FROM desired_configs WHERE device_id = ?", (device_id,)
+            ).fetchone()
+            if not row or int(row["revision"]) != revision:
+                raise DeviceNotFoundError(f"config revision {revision}")
+            connection.execute(
+                """
+                UPDATE desired_configs
+                SET status = ?, result_message = ?, updated_at = ?
+                WHERE device_id = ?
+                """,
+                (
+                    "applied" if ok else "failed",
+                    message[:500],
+                    datetime.now(timezone.utc).isoformat(),
+                    device_id,
+                ),
+            )
+
+    def enqueue_command(self, device_id: str, command: str) -> HubCommandRecord:
+        now = datetime.now(timezone.utc)
+        command_id = uuid.uuid4().hex
+        with self.connect() as connection:
+            self.require_approved(device_id, connection)
+            connection.execute(
+                """
+                INSERT INTO commands (
+                    command_id, device_id, command, status, created_at
+                ) VALUES (?, ?, ?, 'queued', ?)
+                """,
+                (command_id, device_id, command, now.isoformat()),
+            )
+        return HubCommandRecord(
+            command_id=command_id,
+            device_id=device_id,
+            command=command,
+            status="queued",
+            created_at=now,
+        )
+
+    def deliver_commands(self, device_id: str) -> list[HubCommand]:
+        delivered_at = datetime.now(timezone.utc).isoformat()
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT command_id, command, created_at
+                FROM commands
+                WHERE device_id = ? AND status IN ('queued', 'delivered')
+                ORDER BY created_at
+                LIMIT 10
+                """,
+                (device_id,),
+            ).fetchall()
+            if rows:
+                connection.executemany(
+                    "UPDATE commands SET status = 'delivered', delivered_at = ? WHERE command_id = ?",
+                    [(delivered_at, row["command_id"]) for row in rows],
+                )
+        return [
+            HubCommand(
+                command_id=row["command_id"],
+                command=row["command"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+            )
+            for row in rows
+        ]
+
+    def complete_command(
+        self, device_id: str, command_id: str, ok: bool, message: str
+    ) -> None:
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE commands
+                SET status = ?, completed_at = ?, result_message = ?
+                WHERE command_id = ? AND device_id = ?
+                """,
+                (
+                    "completed" if ok else "failed",
+                    datetime.now(timezone.utc).isoformat(),
+                    message[:500],
+                    command_id,
+                    device_id,
+                ),
+            )
+            if cursor.rowcount == 0:
+                raise DeviceNotFoundError(command_id)
+
+    def list_commands(self, device_id: str) -> list[HubCommandRecord]:
+        with self.connect() as connection:
+            self.require_approved(device_id, connection)
+            rows = connection.execute(
+                "SELECT * FROM commands WHERE device_id = ? ORDER BY created_at DESC",
+                (device_id,),
+            ).fetchall()
+        return [
+            HubCommandRecord(
+                command_id=row["command_id"],
+                device_id=row["device_id"],
+                command=row["command"],
+                status=row["status"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+                delivered_at=datetime.fromisoformat(row["delivered_at"])
+                if row["delivered_at"]
+                else None,
+                completed_at=datetime.fromisoformat(row["completed_at"])
+                if row["completed_at"]
+                else None,
+                result_message=row["result_message"],
+            )
+            for row in rows
+        ]
+
     def approve(self, device_id: str) -> None:
         with self.connect() as connection:
             cursor = connection.execute(
@@ -148,7 +366,13 @@ class HubDatabase:
     def get(self, device_id: str, offline_after_seconds: int) -> DeviceRecord:
         with self.connect() as connection:
             row = connection.execute(
-                "SELECT * FROM devices WHERE device_id = ?", (device_id,)
+                """
+                SELECT d.*, c.revision AS desired_revision, c.status AS config_sync_status
+                FROM devices d
+                LEFT JOIN desired_configs c ON c.device_id = d.device_id
+                WHERE d.device_id = ?
+                """,
+                (device_id,),
             ).fetchone()
         if not row:
             raise DeviceNotFoundError(device_id)
@@ -157,7 +381,12 @@ class HubDatabase:
     def list(self, offline_after_seconds: int) -> list[DeviceRecord]:
         with self.connect() as connection:
             rows = connection.execute(
-                "SELECT * FROM devices ORDER BY hostname COLLATE NOCASE, device_id"
+                """
+                SELECT d.*, c.revision AS desired_revision, c.status AS config_sync_status
+                FROM devices d
+                LEFT JOIN desired_configs c ON c.device_id = d.device_id
+                ORDER BY d.hostname COLLATE NOCASE, d.device_id
+                """
             ).fetchall()
         return [self._record(row, offline_after_seconds) for row in rows]
 
@@ -176,6 +405,8 @@ class HubDatabase:
             current_stream_id=row["current_stream_id"],
             current_stream_url=row["current_stream_url"],
             config_revision=row["config_revision"],
+            desired_revision=row["desired_revision"],
+            config_sync_status=row["config_sync_status"],
             cpu_percent=row["cpu_percent"],
             memory_percent=row["memory_percent"],
             disk_percent=row["disk_percent"],
