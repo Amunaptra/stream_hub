@@ -12,6 +12,8 @@ WorkingDirectory=/opt/stream-hub-device
 Environment=STREAM_HUB_PLAYLIST=/etc/stream-hub/playlist.json
 Environment=STREAM_HUB_RUNTIME_DIR=/run/stream-hub
 Environment=STREAM_HUB_LOG_LEVEL=INFO
+Environment=SDL_AUDIODRIVER=dummy
+Environment=XDG_RUNTIME_DIR=/run/stream-hub
 RuntimeDirectory=stream-hub
 RuntimeDirectoryMode=0770
 RuntimeDirectoryPreserve=yes

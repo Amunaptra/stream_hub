@@ -22,16 +22,24 @@ STOP_REQUESTED = False
 
 MPV_COMMAND = [
     "mpv",
+    "--vo=sdl",
     "--fullscreen",
+    "--autofit-larger=1920x1080",
+    "--keepaspect=yes",
+    "--geometry=0:0",
     "--no-config",
+    "--no-audio",
     "--stop-screensaver",
-    "--cache=no",
-    "--demuxer-readahead-secs=0",
+    "--cache=yes",
+    "--cache-secs=2",
+    "--demuxer-readahead-secs=2",
     "--network-timeout=5",
     "--hls-bitrate=max",
+    "--demuxer-lavf-o=fflags=+genpts+igndts",
     "--video-sync=display-desync",
     "--no-terminal",
     "--input-terminal=no",
+    "--force-window=yes",
     "--input-ipc-server=/run/stream-hub/mpv.sock",
 ]
 

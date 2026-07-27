@@ -110,6 +110,9 @@ def test_device_installer_supports_static_hub_and_waits_for_agent() -> None:
     assert '"${INSTALL_ROOT}/build"' in installer
     assert '"${INSTALL_ROOT}/device/agent/"*.egg-info' in installer
     assert "os.fchmod(fd, 0o640)" in player
+    assert '"--vo=sdl"' in player
+    assert '"--cache=yes"' in player
+    assert '"--no-audio"' in player
     assert '["systemctl", "is-active"' in controller
 
 
