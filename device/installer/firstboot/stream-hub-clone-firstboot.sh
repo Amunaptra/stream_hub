@@ -65,7 +65,12 @@ done
 
 root_device="$(findmnt -n -o SOURCE /)"
 parent_name="$(lsblk -n -o PKNAME "${root_device}" | head -n 1)"
-partition_number="$(lsblk -n -o PARTN "${root_device}" | head -n 1)"
+root_block_name="$(basename "$(readlink -f "${root_device}")")"
+partition_file="/sys/class/block/${root_block_name}/partition"
+partition_number=""
+if [[ -r "${partition_file}" ]]; then
+  partition_number="$(<"${partition_file}")"
+fi
 if [[ -n "${parent_name}" && -n "${partition_number}" ]]; then
   log "Growing ${root_device} to fill /dev/${parent_name}"
   growpart "/dev/${parent_name}" "${partition_number}" || true

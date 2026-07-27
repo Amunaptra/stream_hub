@@ -156,6 +156,8 @@ def test_device_package_prepares_golden_image_clones_safely() -> None:
     assert "/var/lib/systemd/random-seed" in firstboot
     assert "ssh-keygen -A" in firstboot
     assert '"${DATA_DIR}/device.json"' in firstboot
+    assert 'partition_file="/sys/class/block/${root_block_name}/partition"' in firstboot
+    assert 'partition_number="$(<"${partition_file}")"' in firstboot
     assert 'growpart "/dev/${parent_name}" "${partition_number}"' in firstboot
     assert 'resize2fs "${root_device}"' in firstboot
     assert "STREAM_HUB_IMAGE_CAPTURE_KEY" in firstboot
