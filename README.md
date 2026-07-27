@@ -2,7 +2,13 @@
 
 Stream Hub, ağdaki Odroid tabanlı HLS yayın oynatıcılarını merkezi bir web panelinden keşfetmek, izlemek ve yönetmek için geliştirilen sistemdir.
 
-Projenin ilk hedefi 15 cihazı destekleyen bir MVP oluşturmaktır. Cihazlar Hub olmasa da son geçerli oynatma listesiyle bağımsız çalışmaya devam eder.
+> **Durum: v0.1.0 saha doğrulamalı kararlı sürüm**
+>
+> Odroid C4, Ubuntu 22.04/aarch64 ve TrueNAS SCALE üzerinde gerçek cihazlarla
+> kurulum, golden-image klonlama, merkezi config, reboot ve yayın oynatma
+> akışları doğrulandı.
+
+Sistem 15 Odroid cihazını merkezi olarak yönetmek üzere tasarlanmıştır. Cihazlar Hub olmasa da son geçerli oynatma listesiyle bağımsız çalışmaya devam eder.
 
 ## Bileşenler
 
@@ -15,7 +21,23 @@ Projenin ilk hedefi 15 cihazı destekleyen bir MVP oluşturmaktır. Cihazlar Hub
 
 ## Güncel durum
 
-Cihaz çalışma katmanı, mDNS discovery, heartbeat, Hub cihaz envanteri, merkezi config senkronizasyonu, komut kuyruğu ve merkezi web arayüzü tamamlandı. Her cihazın oynatma listesi en fazla 50 yayın bağlantısını destekler.
+Cihaz çalışma katmanı, mDNS/sabit URL discovery, heartbeat, Hub cihaz envanteri,
+cihaz isimlendirme, merkezi config senkronizasyonu, reboot/player-restart komut
+kuyruğu, yayın sağlık kontrolü ve merkezi web arayüzü tamamlandı. Her cihazın
+oynatma listesi en fazla 50 yayın bağlantısını destekler.
+
+Sahada doğrulanan başlıca akışlar:
+
+- Ubuntu Minimal üzerine tek komut Odroid kurulumu;
+- TrueNAS SCALE üzerine Hub kurulumu ve kalıcı SQLite verisi;
+- farklı routed subnet'lerden sabit Hub URL ile heartbeat;
+- benzersiz kimlik üreten ve root filesystem'i büyüten golden-image klonlama;
+- Hub'dan playlist gönderimi, player restart ve cihaz reboot;
+- yedi gün/1 GB ile sınırlandırılmış cihaz logları;
+- cihaz ve yayın sağlık bilgilerinin web arayüzünde izlenmesi.
+
+Sürüm ayrıntıları için [v0.1.0 release notlarına](docs/releases/v0.1.0.md)
+bakın.
 
 Yerel doğrulama:
 
@@ -29,4 +51,10 @@ Odroid kurulum bilgisi için [device/README.md](device/README.md), cihaz API sö
 
 Bağımsız Odroid ve Hub dağıtım arşivlerini üretme ve tek komutla kurma bilgisi için [docs/installation-packages.md](docs/installation-packages.md) dosyasına bakın.
 
-Proje kararları ve ilerleme kayıtları için [stream_hub_change_log.md](stream_hub_change_log.md) dosyasına bakın.
+Klon güvenli golden-image üretimi için [docs/golden-image.md](docs/golden-image.md)
+dosyasına bakın. Canlı cihazdan alınmış özel disk imajları kimlik bilgileri
+içerebileceği için dağıtılmaz. v0.1.0 GitHub Release içinde ayrıca özel
+kimlikleri temizlenmiş ve default hesaplara döndürülmüş public Odroid C4 imajı
+bulunur.
+
+Proje kararları ve public ilerleme kayıtları için [stream_hub_change_log.md](stream_hub_change_log.md) dosyasına bakın.
