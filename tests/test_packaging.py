@@ -163,6 +163,14 @@ def test_device_package_prepares_golden_image_clones_safely() -> None:
     assert "STREAM_HUB_IMAGE_CAPTURE_KEY" in firstboot
     assert "ConditionPathExists=!/etc/stream-hub/golden-image" in agent_unit
     assert "ConditionPathExists=!/etc/stream-hub/golden-image" in player_unit
+    assert "NoNewPrivileges=no" in agent_unit
+    for incompatible_option in (
+        "ProtectKernelTunables=yes",
+        "ProtectKernelModules=yes",
+        "ProtectControlGroups=yes",
+        "LockPersonality=yes",
+    ):
+        assert incompatible_option not in agent_unit
 
 
 def test_truenas_container_is_non_root_persistent_and_bounded() -> None:
