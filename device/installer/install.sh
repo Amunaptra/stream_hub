@@ -8,6 +8,7 @@ readonly AGENT_USER="stream-agent"
 readonly SHARED_GROUP="stream-hub"
 readonly PLAYER_USER="${PLAYER_USER:-odroid}"
 readonly SOURCE_ROOT="${STREAM_HUB_SOURCE_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+readonly HUB_URL="${STREAM_HUB_URL:-}"
 
 log() { printf '\n[stream-hub-install] %s\n' "$*"; }
 fail() { printf '\n[stream-hub-install] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -47,6 +48,7 @@ rm -rf "${INSTALL_ROOT}/device"
 cp -a "${SOURCE_ROOT}/device" "${INSTALL_ROOT}/device"
 install -m 0644 "${SOURCE_ROOT}/pyproject.toml" "${INSTALL_ROOT}/pyproject.toml"
 install -m 0644 "${SOURCE_ROOT}/requirements-device.txt" "${INSTALL_ROOT}/requirements-device.txt"
+rm -rf "${INSTALL_ROOT}/build" "${INSTALL_ROOT}/device/agent/"*.egg-info
 
 if [[ ! -x "${INSTALL_ROOT}/venv/bin/python" ]]; then
   python3 -m venv "${INSTALL_ROOT}/venv"
@@ -54,6 +56,11 @@ fi
 "${INSTALL_ROOT}/venv/bin/pip" install --upgrade pip
 "${INSTALL_ROOT}/venv/bin/pip" install \
   --constraint "${INSTALL_ROOT}/requirements-device.txt" \
+  "${INSTALL_ROOT}"
+"${INSTALL_ROOT}/venv/bin/pip" install \
+  --no-cache-dir \
+  --force-reinstall \
+  --no-deps \
   "${INSTALL_ROOT}"
 
 if [[ ! -f "${DATA_DIR}/playlist.json" ]]; then
@@ -76,6 +83,12 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
   "${SOURCE_ROOT}/device/installer/systemd/stream-agent.service" \
   /etc/systemd/system/stream-agent.service
+if [[ -n "${HUB_URL}" ]]; then
+  install -d -o root -g root -m 0755 /etc/systemd/system/stream-agent.service.d
+  printf '[Service]\nEnvironment=STREAM_HUB_URL=%s\n' "${HUB_URL}" \
+    >/etc/systemd/system/stream-agent.service.d/hub.conf
+  chmod 0644 /etc/systemd/system/stream-agent.service.d/hub.conf
+fi
 
 cat >/etc/sudoers.d/stream-hub-agent <<'EOF'
 stream-agent ALL=(root) NOPASSWD: /usr/bin/systemctl is-active stream-player.service
@@ -93,7 +106,15 @@ systemctl enable --now stream-player.service stream-agent.service
 log "Validating installation"
 systemctl is-active --quiet stream-player.service || fail "stream-player.service failed"
 systemctl is-active --quiet stream-agent.service || fail "stream-agent.service failed"
-curl --fail --silent http://127.0.0.1:8787/healthz >/dev/null || fail "agent health check failed"
+AGENT_READY=0
+for _attempt in $(seq 1 20); do
+  if curl --fail --silent http://127.0.0.1:8787/healthz >/dev/null; then
+    AGENT_READY=1
+    break
+  fi
+  sleep 1
+done
+[[ "${AGENT_READY}" -eq 1 ]] || fail "agent health check failed"
 
 printf '\nInstallation complete. Device identity: %s\n' "${DATA_DIR}/device.json"
 printf 'Agent health: http://127.0.0.1:8787/healthz\n'

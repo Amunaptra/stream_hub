@@ -47,6 +47,7 @@ def atomic_state(payload: dict) -> None:
     fd, name = tempfile.mkstemp(prefix=".player-state.", dir=RUNTIME_DIR)
     temporary = Path(name)
     try:
+        os.fchmod(fd, 0o640)
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             json.dump(payload, handle, ensure_ascii=False)
             handle.write("\n")

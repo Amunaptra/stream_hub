@@ -27,9 +27,7 @@ class SystemController:
         )
 
     def player_service_status(self) -> str:
-        result = self._run(
-            ["sudo", "-n", "systemctl", "is-active", self.settings.player_service]
-        )
+        result = self._run(["systemctl", "is-active", self.settings.player_service])
         return result.stdout.strip() or "unknown"
 
     def restart_player(self) -> tuple[bool, str]:

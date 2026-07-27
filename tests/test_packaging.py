@@ -87,6 +87,32 @@ def test_installers_install_runtime_dependencies_and_accept_package_root() -> No
     assert '"${INSTALL_ROOT}/venv/bin/pip" install' in hub
 
 
+def test_device_package_supports_ubuntu_2204_python() -> None:
+    project = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'requires-python = ">=3.10"' in project
+
+
+def test_device_installer_supports_static_hub_and_waits_for_agent() -> None:
+    installer = (ROOT / "device" / "installer" / "install.sh").read_text(
+        encoding="utf-8"
+    )
+    player = (ROOT / "device" / "player" / "stream_player.py").read_text(
+        encoding="utf-8"
+    )
+    controller = (
+        ROOT / "device" / "agent" / "stream_agent" / "system.py"
+    ).read_text(encoding="utf-8")
+    assert 'readonly HUB_URL="${STREAM_HUB_URL:-}"' in installer
+    assert "stream-agent.service.d/hub.conf" in installer
+    assert "for _attempt in $(seq 1 20)" in installer
+    assert "--force-reinstall" in installer
+    assert "--no-cache-dir" in installer
+    assert '"${INSTALL_ROOT}/build"' in installer
+    assert '"${INSTALL_ROOT}/device/agent/"*.egg-info' in installer
+    assert "os.fchmod(fd, 0o640)" in player
+    assert '["systemctl", "is-active"' in controller
+
+
 def test_truenas_container_is_non_root_persistent_and_bounded() -> None:
     dockerfile = (ROOT / "hub" / "container" / "Dockerfile").read_text(encoding="utf-8")
     compose = (ROOT / "hub" / "container" / "compose.truenas.yml").read_text(encoding="utf-8")
