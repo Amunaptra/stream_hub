@@ -72,6 +72,27 @@ class SystemController:
     def ip_addresses() -> list[str]:
         addresses: set[str] = set()
         try:
+            result = SystemController._run(
+                ["ip", "-j", "-4", "addr", "show", "scope", "global"],
+                timeout=5,
+            )
+            if result.returncode == 0:
+                for interface in json.loads(result.stdout):
+                    for address_info in interface.get("addr_info", []):
+                        address = address_info.get("local")
+                        if (
+                            address_info.get("family") == "inet"
+                            and isinstance(address, str)
+                            and not address.startswith("127.")
+                        ):
+                            addresses.add(address)
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+            pass
+
+        if addresses:
+            return sorted(addresses)
+
+        try:
             for item in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
                 address = item[4][0]
                 if not address.startswith("127."):
