@@ -57,6 +57,7 @@ class HubDatabase:
                     device_id TEXT PRIMARY KEY,
                     token_hash TEXT NOT NULL,
                     hostname TEXT NOT NULL,
+                    display_name TEXT,
                     agent_version TEXT NOT NULL,
                     agent_port INTEGER NOT NULL,
                     ip_addresses_json TEXT NOT NULL,
@@ -79,6 +80,12 @@ class HubDatabase:
                 )
                 """
             )
+            device_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(devices)").fetchall()
+            }
+            if "display_name" not in device_columns:
+                connection.execute("ALTER TABLE devices ADD COLUMN display_name TEXT")
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS desired_configs (
@@ -571,6 +578,15 @@ class HubDatabase:
             if cursor.rowcount == 0:
                 raise DeviceNotFoundError(device_id)
 
+    def set_display_name(self, device_id: str, display_name: str | None) -> None:
+        with self.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE devices SET display_name = ? WHERE device_id = ?",
+                (display_name, device_id),
+            )
+            if cursor.rowcount == 0:
+                raise DeviceNotFoundError(device_id)
+
     def get(self, device_id: str, offline_after_seconds: int) -> DeviceRecord:
         with self.connect() as connection:
             row = connection.execute(
@@ -593,7 +609,8 @@ class HubDatabase:
                 SELECT d.*, c.revision AS desired_revision, c.status AS config_sync_status
                 FROM devices d
                 LEFT JOIN desired_configs c ON c.device_id = d.device_id
-                ORDER BY d.hostname COLLATE NOCASE, d.device_id
+                ORDER BY COALESCE(NULLIF(d.display_name, ''), d.hostname) COLLATE NOCASE,
+                         d.device_id
                 """
             ).fetchall()
         return [self._record(row, offline_after_seconds) for row in rows]
@@ -605,6 +622,7 @@ class HubDatabase:
         return DeviceRecord(
             device_id=row["device_id"],
             hostname=row["hostname"],
+            display_name=row["display_name"],
             agent_version=row["agent_version"],
             agent_port=row["agent_port"],
             ip_addresses=json.loads(row["ip_addresses_json"]),

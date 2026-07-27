@@ -57,6 +57,10 @@ function deviceIssue(device) {
   return null;
 }
 
+function deviceName(device) {
+  return device.display_name || device.hostname;
+}
+
 function badge(text, kind = "") {
   return el("span", `badge ${kind}`, text);
 }
@@ -201,7 +205,7 @@ function renderDeviceList() {
   const body = document.createElement("tbody");
   devices.forEach(device => {
     const row = el("tr", "device-row");
-    const name = el("td"); name.append(el("div", "device-name", device.hostname), el("div", "device-id", device.device_id));
+    const name = el("td"); name.append(el("div", "device-name", deviceName(device)), el("div", "device-id", `${device.hostname} · ${device.device_id}`));
     const statusCell = el("td"); statusCell.append(device.online ? badge("Online", "ok") : badge("Offline", "bad"));
     if (!device.approved) statusCell.append(document.createTextNode(" "), badge("Onay bekliyor", "warn"));
     const stream = el("td", "stream-name", device.current_stream_id || "—");
@@ -280,8 +284,21 @@ function renderDrawer() {
   const backdrop = el("div", "drawer-backdrop");
   const drawer = el("aside", "drawer");
   const head = el("div", "drawer-head");
-  const title = el("div"); title.append(el("div", "eyebrow", device.device_id), el("h2", "", device.hostname), device.online ? badge("Online", "ok") : badge("Offline", "bad"));
+  const title = el("div"); title.append(el("div", "eyebrow", `${device.hostname} · ${device.device_id}`), el("h2", "", deviceName(device)), device.online ? badge("Online", "ok") : badge("Offline", "bad"));
   const close = el("button", "btn ghost", "Kapat"); close.onclick = () => backdrop.remove(); head.append(title, close); drawer.append(head);
+  const nameSection = el("section", "device-name-editor");
+  const nameField = el("div", "field"); nameField.append(el("label", "", "Hub üzerindeki cihaz adı"));
+  const nameInput = document.createElement("input"); nameInput.value = device.display_name || ""; nameInput.maxLength = 80; nameInput.placeholder = device.hostname; nameField.append(nameInput);
+  const nameSave = el("button", "btn primary", "Adı kaydet");
+  nameSave.onclick = async () => {
+    nameSave.disabled = true;
+    try {
+      await api(`/api/v1/devices/${encodeURIComponent(device.device_id)}/name`, { method: "PUT", body: JSON.stringify({ display_name: nameInput.value.trim() || null }) });
+      toast("Cihaz adı kaydedildi"); await loadDevices(); await openDevice(device.device_id);
+    } catch (e) { toast(`Cihaz adı kaydedilemedi: ${e.message}`); nameSave.disabled = false; }
+  };
+  nameInput.addEventListener("keydown", event => { if (event.key === "Enter") nameSave.click(); });
+  nameSection.append(nameField, nameSave); drawer.append(nameSection);
   const grid = el("div", "detail-grid");
   grid.append(
     detailStat("IP", device.ip_addresses[0] || "—"),
@@ -339,7 +356,7 @@ function renderDrawer() {
   const restart = el("button", "btn", "Player restart"); const reboot = el("button", "btn danger", "Cihazı reboot et");
   restart.disabled = reboot.disabled = !device.approved;
   restart.onclick = () => queueCommand(device.device_id, "player_restart", "Player restart kuyruğa alındı");
-  reboot.onclick = async () => { if (confirm(`${device.hostname} yeniden başlatılsın mı?`)) await queueCommand(device.device_id, "reboot", "Reboot kuyruğa alındı"); };
+  reboot.onclick = async () => { if (confirm(`${deviceName(device)} yeniden başlatılsın mı?`)) await queueCommand(device.device_id, "reboot", "Reboot kuyruğa alındı"); };
   commandActions.append(restart, reboot); commands.append(commandActions); drawer.append(commands);
   backdrop.onclick = event => { if (event.target === backdrop) backdrop.remove(); };
   backdrop.append(drawer); document.body.append(backdrop);

@@ -27,6 +27,7 @@ from .models import (
     AdminSessionRequest,
     AdminSessionResponse,
     DeviceRecord,
+    DeviceNameUpdate,
     HubCommandRecord,
     HubCommandRequest,
     HubCommandResult,
@@ -248,6 +249,18 @@ def create_app(settings: HubSettings) -> FastAPI:
         except DeviceNotFoundError as exc:
             raise HTTPException(status_code=404, detail="device not found") from exc
         return ApprovalResult(ok=True, device_id=device_id, approved=True)
+
+    @app.put(
+        "/api/v1/devices/{device_id}/name",
+        response_model=DeviceRecord,
+        dependencies=admin,
+    )
+    def set_device_name(device_id: str, body: DeviceNameUpdate) -> DeviceRecord:
+        try:
+            database.set_display_name(device_id, body.display_name)
+            return database.get(device_id, settings.offline_after_seconds)
+        except DeviceNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="device not found") from exc
 
     @app.put(
         "/api/v1/devices/{device_id}/config",

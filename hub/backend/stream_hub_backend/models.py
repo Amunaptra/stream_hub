@@ -114,6 +114,7 @@ class HubConfigResult(HubCommandResult):
 class DeviceRecord(BaseModel):
     device_id: str
     hostname: str
+    display_name: str | None = None
     agent_version: str
     agent_port: int
     ip_addresses: list[str]
@@ -141,6 +142,18 @@ class ApprovalResult(BaseModel):
     ok: bool
     device_id: str
     approved: bool
+
+
+class DeviceNameUpdate(BaseModel):
+    display_name: str | None = Field(default=None, max_length=80)
+
+    @field_validator("display_name")
+    @classmethod
+    def clean_display_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
 
 
 class HubCommandRecord(HubCommand):

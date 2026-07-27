@@ -124,6 +124,31 @@ def test_device_can_be_approved_and_next_heartbeat_reports_approval(tmp_path) ->
     assert heartbeat.json()["approved"] is True
 
 
+def test_admin_can_name_device_and_heartbeat_preserves_name(tmp_path) -> None:
+    client, _ = make_client(tmp_path)
+    device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
+    with client:
+        client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
+        renamed = client.put(
+            "/api/v1/devices/odroid-test-001/name",
+            headers=ADMIN,
+            json={"display_name": "  Salon Ekranı  "},
+        )
+        client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
+        persisted = client.get("/api/v1/devices/odroid-test-001", headers=ADMIN)
+        cleared = client.put(
+            "/api/v1/devices/odroid-test-001/name",
+            headers=ADMIN,
+            json={"display_name": ""},
+        )
+
+    assert renamed.status_code == 200
+    assert renamed.json()["display_name"] == "Salon Ekranı"
+    assert persisted.json()["display_name"] == "Salon Ekranı"
+    assert persisted.json()["hostname"] == "stream-test-01"
+    assert cleared.json()["display_name"] is None
+
+
 def test_registered_device_rejects_a_different_token(tmp_path) -> None:
     client, _ = make_client(tmp_path)
     with client:
