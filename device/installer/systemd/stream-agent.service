@@ -2,6 +2,7 @@
 Description=Stream Hub device agent
 After=network-online.target stream-player.service
 Wants=network-online.target
+ConditionPathExists=!/etc/stream-hub/golden-image
 
 [Service]
 Type=simple

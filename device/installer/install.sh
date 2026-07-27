@@ -22,6 +22,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
   ca-certificates \
+  cloud-guest-utils \
   curl \
   ffmpeg \
   mpv \
@@ -77,6 +78,12 @@ install -o root -g root -m 0644 \
   "${JOURNAL_DROPIN}"
 
 log "Installing systemd services and restricted privilege rules"
+install -o root -g root -m 0755 \
+  "${SOURCE_ROOT}/device/installer/firstboot/stream-hub-clone-firstboot.sh" \
+  /usr/local/sbin/stream-hub-clone-firstboot
+install -o root -g root -m 0644 \
+  "${SOURCE_ROOT}/device/installer/systemd/stream-hub-clone-firstboot.service" \
+  /etc/systemd/system/stream-hub-clone-firstboot.service
 install -o root -g root -m 0644 \
   "${SOURCE_ROOT}/device/installer/systemd/stream-player.service" \
   /etc/systemd/system/stream-player.service
@@ -101,6 +108,7 @@ visudo -cf /etc/sudoers.d/stream-hub-agent >/dev/null
 systemctl daemon-reload
 systemctl restart systemd-journald
 systemctl disable --now getty@tty1.service >/dev/null 2>&1 || true
+systemctl enable stream-hub-clone-firstboot.service
 systemctl enable --now stream-player.service stream-agent.service
 
 log "Validating installation"

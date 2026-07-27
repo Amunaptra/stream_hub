@@ -79,7 +79,14 @@ def test_installers_install_runtime_dependencies_and_accept_package_root() -> No
 
     assert "STREAM_HUB_SOURCE_ROOT" in device
     assert "STREAM_HUB_SOURCE_ROOT" in hub
-    for dependency in ("curl", "ffmpeg", "mpv", "python3-venv", "sudo"):
+    for dependency in (
+        "cloud-guest-utils",
+        "curl",
+        "ffmpeg",
+        "mpv",
+        "python3-venv",
+        "sudo",
+    ):
         assert dependency in device
     for dependency in ("curl", "openssl", "python3-venv"):
         assert dependency in hub
@@ -114,6 +121,46 @@ def test_device_installer_supports_static_hub_and_waits_for_agent() -> None:
     assert '"--cache=yes"' in player
     assert '"--no-audio"' in player
     assert '["systemctl", "is-active"' in controller
+
+
+def test_device_package_prepares_golden_image_clones_safely() -> None:
+    installer = (ROOT / "device" / "installer" / "install.sh").read_text(
+        encoding="utf-8"
+    )
+    firstboot = (
+        ROOT
+        / "device"
+        / "installer"
+        / "firstboot"
+        / "stream-hub-clone-firstboot.sh"
+    ).read_text(encoding="utf-8")
+    unit = (
+        ROOT
+        / "device"
+        / "installer"
+        / "systemd"
+        / "stream-hub-clone-firstboot.service"
+    ).read_text(encoding="utf-8")
+    agent_unit = (
+        ROOT / "device" / "installer" / "systemd" / "stream-agent.service"
+    ).read_text(encoding="utf-8")
+    player_unit = (
+        ROOT / "device" / "installer" / "systemd" / "stream-player.service"
+    ).read_text(encoding="utf-8")
+
+    assert "stream-hub-clone-firstboot.service" in installer
+    assert "cloud-guest-utils" in installer
+    assert "ConditionPathExists=/etc/stream-hub/golden-image" in unit
+    assert "Before=network-pre.target ssh.service stream-agent.service" in unit
+    assert "systemd-machine-id-setup" in firstboot
+    assert "/var/lib/systemd/random-seed" in firstboot
+    assert "ssh-keygen -A" in firstboot
+    assert '"${DATA_DIR}/device.json"' in firstboot
+    assert 'growpart "/dev/${parent_name}" "${partition_number}"' in firstboot
+    assert 'resize2fs "${root_device}"' in firstboot
+    assert "STREAM_HUB_IMAGE_CAPTURE_KEY" in firstboot
+    assert "ConditionPathExists=!/etc/stream-hub/golden-image" in agent_unit
+    assert "ConditionPathExists=!/etc/stream-hub/golden-image" in player_unit
 
 
 def test_truenas_container_is_non_root_persistent_and_bounded() -> None:

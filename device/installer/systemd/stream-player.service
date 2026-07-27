@@ -3,6 +3,7 @@ Description=Stream Hub HLS player
 After=network-online.target
 Wants=network-online.target
 Conflicts=getty@tty1.service
+ConditionPathExists=!/etc/stream-hub/golden-image
 
 [Service]
 Type=simple
