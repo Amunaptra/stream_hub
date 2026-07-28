@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-import threading
 import types
 from pathlib import Path
 
@@ -34,7 +33,7 @@ def test_playlist_parser_preserves_order_and_filters_enabled_streams() -> None:
 
     assert playlist.revision == 7
     assert [stream.id for stream in playlist.streams] == ["one", "two"]
-    assert [stream.id for stream in playlist.enabled_streams] == ["one"]
+    assert [stream.id for stream in playlist.streams if stream.enabled] == ["one"]
     assert playlist.streams[1].seconds == 20
 
 
@@ -52,76 +51,40 @@ def test_playlist_parser_rejects_unsafe_or_ambiguous_entries(payload: str) -> No
         PLAYER.parse_playlist(payload)
 
 
-def test_timestamp_offset_aligns_dynamic_branch_with_pipeline_running_time() -> None:
-    assert PLAYER.timestamp_offset(62_500_000_000, 0, -1) == 62_500_000_000
-    assert PLAYER.timestamp_offset(62_500_000_000, 90_000_000_000, -1) == -27_500_000_000
-    assert PLAYER.timestamp_offset(62_500_000_000, -1, -1) == 0
+def test_mpv_is_started_once_in_idle_keep_open_mode() -> None:
+    assert "--idle=yes" in PLAYER.MPV_COMMAND
+    assert "--keep-open=yes" in PLAYER.MPV_COMMAND
+    assert "--force-window=yes" in PLAYER.MPV_COMMAND
+    assert not any(item.startswith("http") for item in PLAYER.MPV_COMMAND)
 
 
-class FakePad:
-    def __init__(self) -> None:
-        self.properties: dict[str, float | int] = {}
-
-    def set_property(self, name: str, value: float | int) -> None:
-        self.properties[name] = value
-
-
-def branch(token: str, url: str) -> object:
-    return PLAYER.GstBranch(
-        token=token,
-        url=url,
-        elements=(),
-        mixer_pad=FakePad(),
-        ready=threading.Event(),
+def test_stream_switch_uses_loadfile_on_existing_mpv(monkeypatch: pytest.MonkeyPatch) -> None:
+    stream = PLAYER.StreamItem(
+        id="next",
+        url="http://media/next.m3u8",
+        seconds=20,
+        enabled=True,
     )
-
-
-def backend_for_transition(
-    current: object | None,
-    pending: object,
-    wait_result: tuple[bool, str, int],
-) -> tuple[object, list[object]]:
-    backend = PLAYER.GstCrossfadeBackend.__new__(PLAYER.GstCrossfadeBackend)
-    backend._lock = threading.RLock()
-    backend.current = current
-    backend.crossfade_ms = 0
-    removed: list[object] = []
-    backend._new_branch = types.MethodType(lambda _self, _url: pending, backend)
-    backend._wait_until_ready = types.MethodType(
-        lambda _self, _branch, _timeout: wait_result, backend
+    player = PLAYER.PersistentMpv()
+    commands: list[list[object]] = []
+    player.send = types.MethodType(
+        lambda _self, command, timeout=3: commands.append(command) or {},
+        player,
     )
-    backend._retire_branch = types.MethodType(
-        lambda _self, item: removed.append(item), backend
-    )
-    return backend, removed
+    monkeypatch.setattr(PLAYER.STOP_REQUESTED, "wait", lambda _timeout: False)
+
+    elapsed = player.load(stream)
+
+    assert commands == [["loadfile", stream.url, "replace"]]
+    assert elapsed >= 0
 
 
-def test_failed_preroll_keeps_old_stream_visible() -> None:
-    old = branch("old", "http://media/old.m3u8")
-    pending = branch("new", "http://media/new.m3u8")
-    backend, removed = backend_for_transition(
-        old, pending, (False, "preroll timeout", 8000)
-    )
+def test_zero_duration_waits_until_mpv_becomes_idle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    player = PLAYER.PersistentMpv()
+    idle_values = iter([False, False, True])
+    player.idle = types.MethodType(lambda _self: next(idle_values), player)
+    monkeypatch.setattr(PLAYER.STOP_REQUESTED, "wait", lambda _timeout: False)
 
-    result = backend.transition(pending.url, timeout_seconds=8)
-
-    assert result.success is False
-    assert backend.current is old
-    assert removed == [pending]
-    assert old.mixer_pad.properties == {}
-
-
-def test_ready_stream_replaces_old_only_after_preroll() -> None:
-    old = branch("old", "http://media/old.m3u8")
-    pending = branch("new", "http://media/new.m3u8")
-    backend, removed = backend_for_transition(
-        old, pending, (True, "first frame ready", 640)
-    )
-
-    result = backend.transition(pending.url, timeout_seconds=8)
-
-    assert result.success is True
-    assert result.preroll_ms == 640
-    assert backend.current is pending
-    assert pending.mixer_pad.properties["alpha"] == 1.0
-    assert removed == [old]
+    PLAYER.wait_for_stream_duration(player, 0)

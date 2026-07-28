@@ -4,25 +4,12 @@ set -Eeuo pipefail
 readonly DATA_DIR="/etc/stream-hub"
 readonly MARKER="${DATA_DIR}/golden-image"
 readonly CAPTURE_KEY_TAG="STREAM_HUB_IMAGE_CAPTURE_KEY"
-readonly OFFLINE_PACKAGE_DIR="/opt/stream-hub-device/offline/gstreamer"
 
 log() {
   printf '[stream-hub-firstboot] %s\n' "$*"
 }
 
 [[ -e "${MARKER}" ]] || exit 0
-
-if compgen -G "${OFFLINE_PACKAGE_DIR}/*.deb" >/dev/null; then
-  log "Installing embedded offline playback runtime"
-  export DEBIAN_FRONTEND=noninteractive
-  dpkg -i "${OFFLINE_PACKAGE_DIR}"/*.deb || true
-  apt-get --no-download --fix-broken install -y
-  rm -rf /root/.cache/gstreamer-1.0 /home/*/.cache/gstreamer-1.0
-  for element in compositor input-selector fbdevsink avdec_h264 hlsdemux; do
-    gst-inspect-1.0 "${element}" >/dev/null
-  done
-  rm -rf "${OFFLINE_PACKAGE_DIR}"
-fi
 
 log "Preparing cloned device identity"
 

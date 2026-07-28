@@ -13,9 +13,7 @@ WorkingDirectory=/opt/stream-hub-device
 Environment=STREAM_HUB_PLAYLIST=/etc/stream-hub/playlist.json
 Environment=STREAM_HUB_RUNTIME_DIR=/run/stream-hub
 Environment=STREAM_HUB_LOG_LEVEL=INFO
-Environment=STREAM_HUB_CROSSFADE_MS=400
-Environment=STREAM_HUB_PREROLL_TIMEOUT=8
-Environment=STREAM_HUB_FRAMEBUFFER=/dev/fb0
+Environment=SDL_AUDIODRIVER=dummy
 Environment=XDG_RUNTIME_DIR=/run/stream-hub
 RuntimeDirectory=stream-hub
 RuntimeDirectoryMode=0770
@@ -27,7 +25,7 @@ StandardError=journal
 TTYReset=yes
 TTYVHangup=yes
 TTYVTDisallocate=no
-ExecStart=/usr/bin/python3 /opt/stream-hub-device/device/player/stream_player.py
+ExecStart=/opt/stream-hub-device/venv/bin/python /opt/stream-hub-device/device/player/stream_player.py
 Restart=always
 RestartSec=3
 TimeoutStopSec=10

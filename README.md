@@ -6,8 +6,8 @@ Stream Hub, ağdaki Odroid tabanlı HLS yayın oynatıcılarını merkezi bir we
 >
 > Odroid C4, Ubuntu 22.04/aarch64 ve TrueNAS SCALE üzerinde gerçek cihazlarla
 > kurulum, golden-image klonlama, merkezi config, reboot ve yayın oynatma
-> akışları doğrulandı. Sekiz cihazlık canlı filoda preroll ve yaklaşık 400 ms
-> crossfade ile siyah ekransız yayın geçişi devreye alındı.
+> akışları doğrulandı. Sekiz cihazlık canlı filoda tek kalıcı MPV süreci ve IPC
+> `loadfile replace` ile siyah ekransız yayın geçişi devreye alındı.
 
 Sistem 15 Odroid cihazını merkezi olarak yönetmek üzere tasarlanmıştır. Cihazlar Hub olmasa da son geçerli oynatma listesiyle bağımsız çalışmaya devam eder.
 
@@ -34,8 +34,8 @@ Sahada doğrulanan başlıca akışlar:
 - farklı routed subnet'lerden sabit Hub URL ile heartbeat;
 - benzersiz kimlik üreten ve root filesystem'i büyüten golden-image klonlama;
 - Hub'dan playlist gönderimi, player restart ve cihaz reboot;
-- yeni yayın ilk karesini hazırlarken eski yayını ekranda tutan A/B preroll ve
-  yaklaşık 400 ms crossfade;
+- yayınlar arasında SDL penceresini kapatmayan kalıcı MPV ve IPC tabanlı temiz
+  geçiş;
 - yedi gün/1 GB ile sınırlandırılmış cihaz logları;
 - cihaz ve yayın sağlık bilgilerinin web arayüzünde izlenmesi.
 
