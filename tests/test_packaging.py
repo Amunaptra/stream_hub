@@ -83,7 +83,14 @@ def test_installers_install_runtime_dependencies_and_accept_package_root() -> No
         "cloud-guest-utils",
         "curl",
         "ffmpeg",
+        "gir1.2-gstreamer-1.0",
+        "gstreamer1.0-libav",
+        "gstreamer1.0-plugins-bad",
+        "gstreamer1.0-plugins-base",
+        "gstreamer1.0-plugins-good",
+        "gstreamer1.0-tools",
         "mpv",
+        "python3-gi",
         "python3-venv",
         "sudo",
     ):
@@ -117,9 +124,10 @@ def test_device_installer_supports_static_hub_and_waits_for_agent() -> None:
     assert '"${INSTALL_ROOT}/build"' in installer
     assert '"${INSTALL_ROOT}/device/agent/"*.egg-info' in installer
     assert "os.fchmod(fd, 0o640)" in player
-    assert '"--vo=sdl"' in player
-    assert '"--cache=yes"' in player
-    assert '"--no-audio"' in player
+    assert "class GstCrossfadeBackend" in player
+    assert '"fbdevsink"' in player
+    assert '"uridecodebin"' in player
+    assert '"compositor"' in player
     assert '["systemctl", "is-active"' in controller
 
 
