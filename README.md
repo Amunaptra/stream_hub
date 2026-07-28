@@ -2,11 +2,12 @@
 
 Stream Hub, ağdaki Odroid tabanlı HLS yayın oynatıcılarını merkezi bir web panelinden keşfetmek, izlemek ve yönetmek için geliştirilen sistemdir.
 
-> **Durum: v0.1.0 saha doğrulamalı kararlı sürüm**
+> **Durum: v0.1.1 saha doğrulamalı kararlı sürüm**
 >
 > Odroid C4, Ubuntu 22.04/aarch64 ve TrueNAS SCALE üzerinde gerçek cihazlarla
 > kurulum, golden-image klonlama, merkezi config, reboot ve yayın oynatma
-> akışları doğrulandı.
+> akışları doğrulandı. Sekiz cihazlık canlı filoda preroll ve yaklaşık 400 ms
+> crossfade ile siyah ekransız yayın geçişi devreye alındı.
 
 Sistem 15 Odroid cihazını merkezi olarak yönetmek üzere tasarlanmıştır. Cihazlar Hub olmasa da son geçerli oynatma listesiyle bağımsız çalışmaya devam eder.
 
@@ -33,10 +34,12 @@ Sahada doğrulanan başlıca akışlar:
 - farklı routed subnet'lerden sabit Hub URL ile heartbeat;
 - benzersiz kimlik üreten ve root filesystem'i büyüten golden-image klonlama;
 - Hub'dan playlist gönderimi, player restart ve cihaz reboot;
+- yeni yayın ilk karesini hazırlarken eski yayını ekranda tutan A/B preroll ve
+  yaklaşık 400 ms crossfade;
 - yedi gün/1 GB ile sınırlandırılmış cihaz logları;
 - cihaz ve yayın sağlık bilgilerinin web arayüzünde izlenmesi.
 
-Sürüm ayrıntıları için [v0.1.0 release notlarına](docs/releases/v0.1.0.md)
+Sürüm ayrıntıları için [v0.1.1 release notlarına](docs/releases/v0.1.1.md)
 bakın.
 
 Yerel doğrulama:
@@ -53,7 +56,7 @@ Bağımsız Odroid ve Hub dağıtım arşivlerini üretme ve tek komutla kurma b
 
 Klon güvenli golden-image üretimi için [docs/golden-image.md](docs/golden-image.md)
 dosyasına bakın. Canlı cihazdan alınmış özel disk imajları kimlik bilgileri
-içerebileceği için dağıtılmaz. v0.1.0 GitHub Release içinde ayrıca özel
+içerebileceği için dağıtılmaz. v0.1.1 GitHub Release içinde ayrıca özel
 kimlikleri temizlenmiş ve default hesaplara döndürülmüş public Odroid C4 imajı
 bulunur.
 

@@ -19,7 +19,7 @@ capture to a public repository or release. A separately sanitized public image
 must remove every deployment-specific credential and pass a dedicated security
 audit before distribution.
 
-The v0.1.0 public release image is a separate sanitized derivative. It is not
+The v0.1.1 public release image is a separate sanitized derivative. It is not
 the private field image. Its device token, command cache, authorized keys, SSH
 host keys, machine ID, logs, histories, leases, and deleted free-space data
 were cleared before release.
