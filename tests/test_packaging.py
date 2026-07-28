@@ -169,6 +169,11 @@ def test_device_package_prepares_golden_image_clones_safely() -> None:
     assert 'growpart "/dev/${parent_name}" "${partition_number}"' in firstboot
     assert 'resize2fs "${root_device}"' in firstboot
     assert "STREAM_HUB_IMAGE_CAPTURE_KEY" in firstboot
+    assert 'OFFLINE_PACKAGE_DIR="/opt/stream-hub-device/offline/gstreamer"' in firstboot
+    assert 'dpkg -i "${OFFLINE_PACKAGE_DIR}"/*.deb || true' in firstboot
+    assert "apt-get --no-download --fix-broken install -y" in firstboot
+    assert "compositor input-selector fbdevsink avdec_h264 hlsdemux" in firstboot
+    assert 'rm -rf "${OFFLINE_PACKAGE_DIR}"' in firstboot
     assert "ConditionPathExists=!/etc/stream-hub/golden-image" in agent_unit
     assert "ConditionPathExists=!/etc/stream-hub/golden-image" in player_unit
     assert "NoNewPrivileges=no" in agent_unit

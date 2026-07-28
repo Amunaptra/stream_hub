@@ -43,6 +43,9 @@ SSH, the player, and the agent. It:
 - generates a new machine ID and SSH host keys;
 - clears the copied random seed and stale network leases;
 - removes the source device registration and command results;
+- installs and verifies an embedded offline playback-runtime bundle when the
+  image contains `/opt/stream-hub-device/offline/gstreamer/*.deb`, then removes
+  that bundle to reclaim space;
 - expands the root partition and filesystem to fill the target eMMC;
 - removes the image-capture public key, deletes the marker, and reboots.
 
