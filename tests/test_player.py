@@ -52,6 +52,12 @@ def test_playlist_parser_rejects_unsafe_or_ambiguous_entries(payload: str) -> No
         PLAYER.parse_playlist(payload)
 
 
+def test_timestamp_offset_aligns_dynamic_branch_with_pipeline_running_time() -> None:
+    assert PLAYER.timestamp_offset(62_500_000_000, 0, -1) == 62_500_000_000
+    assert PLAYER.timestamp_offset(62_500_000_000, 90_000_000_000, -1) == -27_500_000_000
+    assert PLAYER.timestamp_offset(62_500_000_000, -1, -1) == 0
+
+
 class FakePad:
     def __init__(self) -> None:
         self.properties: dict[str, float | int] = {}

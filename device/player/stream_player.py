@@ -146,6 +146,12 @@ def load_playlist() -> PlayerPlaylist:
     return parse_playlist(CONFIG_FILE.read_text(encoding="utf-8"))
 
 
+def timestamp_offset(running_time_ns: int, buffer_pts_ns: int, clock_time_none: int) -> int:
+    if buffer_pts_ns == clock_time_none:
+        return 0
+    return running_time_ns - buffer_pts_ns
+
+
 class GstCrossfadeBackend:
     def __init__(
         self,
@@ -323,8 +329,41 @@ class GstCrossfadeBackend:
             ready.set()
             return self.Gst.PadProbeReturn.REMOVE
 
+        def align_first_buffer(_pad: Any, info: Any) -> Any:
+            buffer = info.get_buffer()
+            clock = self.pipeline.get_clock()
+            if buffer is None or clock is None:
+                branch.error = "could not align decoded video timestamp"
+                return self.Gst.PadProbeReturn.REMOVE
+            running_time_ns = max(
+                0,
+                int(clock.get_time()) - int(self.pipeline.get_base_time()),
+            )
+            offset_ns = timestamp_offset(
+                running_time_ns,
+                int(buffer.pts),
+                int(self.Gst.CLOCK_TIME_NONE),
+            )
+            identity.set_property("ts-offset", offset_ns)
+            LOGGER.info(
+                "aligned stream branch=%s running_time_ms=%s pts_ms=%s offset_ms=%s",
+                branch.token,
+                running_time_ns // 1_000_000,
+                (
+                    "none"
+                    if buffer.pts == self.Gst.CLOCK_TIME_NONE
+                    else int(buffer.pts) // 1_000_000
+                ),
+                offset_ns // 1_000_000,
+            )
+            return self.Gst.PadProbeReturn.REMOVE
+
         source.connect("pad-added", pad_added)
         source.connect("source-setup", source_setup)
+        capsfilter.get_static_pad("src").add_probe(
+            self.Gst.PadProbeType.BUFFER,
+            align_first_buffer,
+        )
         identity_pad.add_probe(self.Gst.PadProbeType.BUFFER, first_buffer)
         for element in branch.elements:
             if not element.sync_state_with_parent():
