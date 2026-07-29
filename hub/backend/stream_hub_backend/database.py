@@ -15,6 +15,7 @@ from .models import (
     HubHeartbeatPayload,
     HubPlaylistConfig,
     HubPlaylistDraft,
+    HubStreamHealth,
 )
 
 
@@ -30,6 +31,12 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _password_hash(password: str, salt: bytes) -> str:
+    return hashlib.scrypt(
+        password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=32
+    ).hex()
+
+
 class HubDatabase:
     def __init__(self, path: Path):
         self.path = path
@@ -42,7 +49,7 @@ class HubDatabase:
         connection.execute("PRAGMA busy_timeout=5000")
         return connection
 
-    def initialize(self) -> None:
+    def initialize(self, admin_username: str, admin_password: str) -> None:
         with self.connect() as connection:
             connection.execute(
                 """
@@ -50,6 +57,7 @@ class HubDatabase:
                     device_id TEXT PRIMARY KEY,
                     token_hash TEXT NOT NULL,
                     hostname TEXT NOT NULL,
+                    display_name TEXT,
                     agent_version TEXT NOT NULL,
                     agent_port INTEGER NOT NULL,
                     ip_addresses_json TEXT NOT NULL,
@@ -72,6 +80,12 @@ class HubDatabase:
                 )
                 """
             )
+            device_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(devices)").fetchall()
+            }
+            if "display_name" not in device_columns:
+                connection.execute("ALTER TABLE devices ADD COLUMN display_name TEXT")
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS desired_configs (
@@ -107,6 +121,103 @@ class HubDatabase:
                     result_message TEXT
                 )
                 """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS stream_health (
+                    device_id TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+                    stream_id TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    enabled INTEGER NOT NULL,
+                    ok INTEGER NOT NULL,
+                    status_code INTEGER,
+                    latency_ms INTEGER NOT NULL,
+                    error TEXT,
+                    checked_at TEXT NOT NULL,
+                    PRIMARY KEY (device_id, stream_id)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS admin_credentials (
+                    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                    username TEXT NOT NULL UNIQUE,
+                    password_salt TEXT NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    session_secret TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            existing = connection.execute(
+                "SELECT 1 FROM admin_credentials WHERE singleton = 1"
+            ).fetchone()
+            if not existing:
+                salt = secrets.token_bytes(16)
+                connection.execute(
+                    """
+                    INSERT INTO admin_credentials (
+                        singleton, username, password_salt, password_hash,
+                        session_secret, updated_at
+                    ) VALUES (1, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        admin_username,
+                        salt.hex(),
+                        _password_hash(admin_password, salt),
+                        secrets.token_hex(32),
+                        datetime.now(timezone.utc).isoformat(),
+                    ),
+                )
+
+    def authenticate_admin(self, username: str, password: str) -> bool:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT username, password_salt, password_hash
+                FROM admin_credentials WHERE singleton = 1
+                """
+            ).fetchone()
+        if not row or not secrets.compare_digest(username, row["username"]):
+            return False
+        supplied = _password_hash(password, bytes.fromhex(row["password_salt"]))
+        return secrets.compare_digest(supplied, row["password_hash"])
+
+    def admin_session_identity(self) -> tuple[str, str]:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT username, session_secret
+                FROM admin_credentials WHERE singleton = 1
+                """
+            ).fetchone()
+        if not row:
+            raise RuntimeError("administrator credentials are not initialized")
+        return row["username"], row["session_secret"]
+
+    def update_admin_credentials(
+        self, current_password: str, username: str, new_password: str
+    ) -> None:
+        current_username, _ = self.admin_session_identity()
+        if not self.authenticate_admin(current_username, current_password):
+            raise PermissionError("current password is incorrect")
+        salt = secrets.token_bytes(16)
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE admin_credentials
+                SET username = ?, password_salt = ?, password_hash = ?,
+                    session_secret = ?, updated_at = ?
+                WHERE singleton = 1
+                """,
+                (
+                    username,
+                    salt.hex(),
+                    _password_hash(new_password, salt),
+                    secrets.token_hex(32),
+                    datetime.now(timezone.utc).isoformat(),
+                ),
             )
 
     def upsert_heartbeat(self, payload: HubHeartbeatPayload, token: str) -> bool:
@@ -195,7 +306,64 @@ class HubDatabase:
                     now,
                 ),
             )
+            connection.execute(
+                "DELETE FROM stream_health WHERE device_id = ?", (payload.device_id,)
+            )
+            if payload.stream_health:
+                connection.executemany(
+                    """
+                    INSERT INTO stream_health (
+                        device_id, stream_id, url, enabled, ok, status_code,
+                        latency_ms, error, checked_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            payload.device_id,
+                            item.id,
+                            item.url,
+                            int(item.enabled),
+                            int(item.ok),
+                            item.status_code,
+                            item.latency_ms,
+                            item.error,
+                            item.checked_at.isoformat(),
+                        )
+                        for item in payload.stream_health
+                    ],
+                )
             return bool(row["approved"])
+
+    def stream_health(self, device_id: str) -> list[HubStreamHealth]:
+        with self.connect() as connection:
+            exists = connection.execute(
+                "SELECT 1 FROM devices WHERE device_id = ?", (device_id,)
+            ).fetchone()
+            if not exists:
+                raise DeviceNotFoundError(device_id)
+            rows = connection.execute(
+                """
+                SELECT stream_id, url, enabled, ok, status_code, latency_ms,
+                       error, checked_at
+                FROM stream_health
+                WHERE device_id = ?
+                ORDER BY stream_id COLLATE NOCASE
+                """,
+                (device_id,),
+            ).fetchall()
+        return [
+            HubStreamHealth(
+                id=row["stream_id"],
+                url=row["url"],
+                enabled=bool(row["enabled"]),
+                ok=bool(row["ok"]),
+                status_code=row["status_code"],
+                latency_ms=row["latency_ms"],
+                error=row["error"],
+                checked_at=datetime.fromisoformat(row["checked_at"]),
+            )
+            for row in rows
+        ]
 
     def authenticate_device(self, device_id: str, token: str) -> None:
         with self.connect() as connection:
@@ -410,6 +578,15 @@ class HubDatabase:
             if cursor.rowcount == 0:
                 raise DeviceNotFoundError(device_id)
 
+    def set_display_name(self, device_id: str, display_name: str | None) -> None:
+        with self.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE devices SET display_name = ? WHERE device_id = ?",
+                (display_name, device_id),
+            )
+            if cursor.rowcount == 0:
+                raise DeviceNotFoundError(device_id)
+
     def get(self, device_id: str, offline_after_seconds: int) -> DeviceRecord:
         with self.connect() as connection:
             row = connection.execute(
@@ -432,7 +609,8 @@ class HubDatabase:
                 SELECT d.*, c.revision AS desired_revision, c.status AS config_sync_status
                 FROM devices d
                 LEFT JOIN desired_configs c ON c.device_id = d.device_id
-                ORDER BY d.hostname COLLATE NOCASE, d.device_id
+                ORDER BY COALESCE(NULLIF(d.display_name, ''), d.hostname) COLLATE NOCASE,
+                         d.device_id
                 """
             ).fetchall()
         return [self._record(row, offline_after_seconds) for row in rows]
@@ -444,6 +622,7 @@ class HubDatabase:
         return DeviceRecord(
             device_id=row["device_id"],
             hostname=row["hostname"],
+            display_name=row["display_name"],
             agent_version=row["agent_version"],
             agent_port=row["agent_port"],
             ip_addresses=json.loads(row["ip_addresses_json"]),

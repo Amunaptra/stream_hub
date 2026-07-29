@@ -10,6 +10,18 @@ Sabit adres her zaman önceliklidir:
 STREAM_HUB_URL=http://192.168.1.10:8788
 ```
 
+## Yayın sağlığı
+
+Her Odroid aktif oynatma listesindeki yayın URL'lerini kendi ağ bağlantısı üzerinden kontrol eder. Kontrol, HLS manifestinin HTTP 200 yanıtı vermesini ve ilk 4 KB içinde `#EXTM3U` işaretinin bulunmasını doğrular.
+
+- Varsayılan kontrol aralığı 60 saniyedir ve `STREAM_HUB_STREAM_HEALTH_INTERVAL` ile değiştirilebilir.
+- Cihaz yükünü sınırlamak için aynı anda en fazla 6 yayın kontrol edilir.
+- Her kaynak için HTTP kodu, gecikme, hata ve son kontrol zamanı önbelleğe alınır.
+- Heartbeat önbellekteki sonuçları Hub'a gönderir; Hub bu nedenle yayını Odroid'in gerçek ağ koşullarından görür.
+- Web arayüzü playlist satırlarında `Sağlıklı`, `Hatalı`, `Devre dışı` veya `Kontrol bekliyor` durumunu gösterir.
+
+Kaynak kontrolü, aktif MPV oynatıcı durumundan ayrıdır. Hub hem kaynağın erişilebilirliğini hem de cihazın o anda oynattığı yayını raporlar.
+
 mDNS multicast paketleri farklı VLAN veya subnet'lere varsayılan olarak geçmez. Böyle ortamlarda DNS adı, sabit Hub URL veya ağ seviyesinde mDNS reflector gerekir.
 
 ## Heartbeat

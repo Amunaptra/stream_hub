@@ -39,6 +39,7 @@ class HubHeartbeatPayload(BaseModel):
     agent_port: int = Field(ge=1, le=65535)
     status: HubDeviceStatus
     reported_config: "HubPlaylistConfig"
+    stream_health: list["HubStreamHealth"] = Field(default_factory=list, max_length=50)
 
 
 class HubHeartbeatResponse(BaseModel):
@@ -66,7 +67,7 @@ class HubStreamItem(BaseModel):
 
 class HubPlaylistDraft(BaseModel):
     default_seconds: int = Field(default=20, ge=0, le=86_400)
-    streams: list[HubStreamItem] = Field(default_factory=list, max_length=40)
+    streams: list[HubStreamItem] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def unique_stream_ids(self) -> "HubPlaylistDraft":
@@ -78,6 +79,17 @@ class HubPlaylistDraft(BaseModel):
 
 class HubPlaylistConfig(HubPlaylistDraft):
     revision: int = Field(ge=0)
+
+
+class HubStreamHealth(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    url: str = Field(min_length=8, max_length=2_048)
+    enabled: bool
+    ok: bool
+    status_code: int | None = None
+    latency_ms: int = Field(ge=0)
+    error: str | None = Field(default=None, max_length=500)
+    checked_at: datetime
 
 
 class HubCommand(BaseModel):
@@ -102,6 +114,7 @@ class HubConfigResult(HubCommandResult):
 class DeviceRecord(BaseModel):
     device_id: str
     hostname: str
+    display_name: str | None = None
     agent_version: str
     agent_port: int
     ip_addresses: list[str]
@@ -131,6 +144,18 @@ class ApprovalResult(BaseModel):
     approved: bool
 
 
+class DeviceNameUpdate(BaseModel):
+    display_name: str | None = Field(default=None, max_length=80)
+
+    @field_validator("display_name")
+    @classmethod
+    def clean_display_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
 class HubCommandRecord(HubCommand):
     device_id: str
     status: str
@@ -140,8 +165,19 @@ class HubCommandRecord(HubCommand):
 
 
 class AdminSessionRequest(BaseModel):
-    token: str
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")
+    password: str = Field(min_length=8, max_length=128)
 
 
 class AdminSessionResponse(BaseModel):
     ok: bool = True
+
+
+class AdminProfile(BaseModel):
+    username: str
+
+
+class AdminCredentialsUpdate(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")
+    new_password: str = Field(min_length=8, max_length=128)

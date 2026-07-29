@@ -1,0 +1,26 @@
+[Unit]
+Description=Stream Hub central management service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stream-hub
+Group=stream-hub
+WorkingDirectory=/opt/stream-hub/hub/backend
+EnvironmentFile=/etc/stream-hub/hub.env
+ExecStart=/opt/stream-hub/venv/bin/uvicorn stream_hub_backend.main:APP --host 0.0.0.0 --port 8788 --no-access-log
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/stream-hub
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
