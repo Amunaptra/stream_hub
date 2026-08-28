@@ -2,12 +2,14 @@
 
 Stream Hub, ağdaki Odroid tabanlı HLS ve RTMP yayın oynatıcılarını merkezi bir web panelinden keşfetmek, izlemek ve yönetmek için geliştirilen sistemdir.
 
-> **Durum: v0.1.1 saha doğrulamalı kararlı sürüm**
+> **Durum: v0.1.2 saha doğrulamalı kararlı sürüm**
 >
 > Odroid C4, Ubuntu 22.04/aarch64 ve TrueNAS SCALE üzerinde gerçek cihazlarla
 > kurulum, golden-image klonlama, merkezi config, reboot ve yayın oynatma
-> akışları doğrulandı. Sekiz cihazlık canlı filoda tek kalıcı MPV süreci ve IPC
-> `loadfile replace` ile siyah ekransız yayın geçişi devreye alındı.
+> akışları doğrulandı. 13 cihazlık canlı filoda tek kalıcı MPV süreci ve IPC
+> `loadfile replace` ile siyah ekransız yayın geçişi devreye alındı. v0.1.2 ile
+> HLS yanında RTMP/RTMPS config, kaynak ön kontrolü ve sağlık ölçümü canlıda
+> doğrulandı.
 
 Sistem 15 Odroid cihazını merkezi olarak yönetmek üzere tasarlanmıştır. Cihazlar Hub olmasa da son geçerli oynatma listesiyle bağımsız çalışmaya devam eder.
 
@@ -41,7 +43,7 @@ Sahada doğrulanan başlıca akışlar:
 - yedi gün/1 GB ile sınırlandırılmış cihaz logları;
 - cihaz ve yayın sağlık bilgilerinin web arayüzünde izlenmesi.
 
-Sürüm ayrıntıları için [v0.1.1 release notlarına](docs/releases/v0.1.1.md)
+Sürüm ayrıntıları için [v0.1.2 release notlarına](docs/releases/v0.1.2.md)
 bakın.
 
 Yerel doğrulama:
@@ -58,8 +60,8 @@ Bağımsız Odroid ve Hub dağıtım arşivlerini üretme ve tek komutla kurma b
 
 Klon güvenli golden-image üretimi için [docs/golden-image.md](docs/golden-image.md)
 dosyasına bakın. Canlı cihazdan alınmış özel disk imajları kimlik bilgileri
-içerebileceği için dağıtılmaz. v0.1.1 GitHub Release içinde ayrıca özel
+içerebileceği için dağıtılmaz. v0.1.2 GitHub Release içinde ayrıca özel
 kimlikleri temizlenmiş ve default hesaplara döndürülmüş public Odroid C4 imajı
-bulunur.
+bulunur. RTMP/RTMPS desteği için v0.1.2 veya daha yeni imajı kullanın.
 
 Proje kararları ve public ilerleme kayıtları için [stream_hub_change_log.md](stream_hub_change_log.md) dosyasına bakın.

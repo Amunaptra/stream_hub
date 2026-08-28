@@ -19,10 +19,14 @@ capture to a public repository or release. A separately sanitized public image
 must remove every deployment-specific credential and pass a dedicated security
 audit before distribution.
 
-The v0.1.1 public release image is a separate sanitized derivative. It is not
+The v0.1.2 public release image is a separate sanitized derivative. It is not
 the private field image. Its device token, command cache, authorized keys, SSH
 host keys, machine ID, logs, histories, leases, and deleted free-space data
 were cleared before release.
+
+The v0.1.2 image supports HLS over HTTP/HTTPS and RTMP/RTMPS. RTMP source
+preflight and stream-health checks use the bundled `ffprobe` runtime before
+the persistent MPV process replaces the current stream.
 
 Default public-image accounts:
 
