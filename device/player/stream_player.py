@@ -29,6 +29,10 @@ SOURCE_CHECK_TIMEOUT = max(
     0.5,
     float(os.environ.get("STREAM_HUB_SOURCE_CHECK_TIMEOUT", "2")),
 )
+RTMP_SOURCE_CHECK_TIMEOUT = max(
+    SOURCE_CHECK_TIMEOUT,
+    float(os.environ.get("STREAM_HUB_RTMP_SOURCE_CHECK_TIMEOUT", "8")),
+)
 STOP_REQUESTED = threading.Event()
 
 MPV_COMMAND = [
@@ -114,6 +118,7 @@ def load_playlist() -> PlaylistConfig:
 
 def source_is_reachable(url: str, timeout: float = SOURCE_CHECK_TIMEOUT) -> bool:
     if url.lower().startswith(("rtmp://", "rtmps://")):
+        probe_timeout = max(timeout, RTMP_SOURCE_CHECK_TIMEOUT)
         try:
             result = subprocess.run(
                 [
@@ -121,7 +126,7 @@ def source_is_reachable(url: str, timeout: float = SOURCE_CHECK_TIMEOUT) -> bool
                     "-v",
                     "error",
                     "-rw_timeout",
-                    str(int(timeout * 1_000_000)),
+                    str(int(probe_timeout * 1_000_000)),
                     "-show_entries",
                     "stream=codec_type",
                     "-of",
@@ -131,7 +136,7 @@ def source_is_reachable(url: str, timeout: float = SOURCE_CHECK_TIMEOUT) -> bool
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                timeout=timeout + 1,
+                timeout=probe_timeout + 1,
                 check=False,
                 text=True,
             )

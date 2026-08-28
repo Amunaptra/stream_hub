@@ -60,16 +60,20 @@ def test_mpv_is_started_once_in_idle_keep_open_mode() -> None:
 
 def test_rtmp_source_precheck_uses_ffprobe(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
+    options: list[dict[str, object]] = []
 
-    def fake_run(command: list[str], **_kwargs: object) -> object:
+    def fake_run(command: list[str], **kwargs: object) -> object:
         calls.append(command)
+        options.append(kwargs)
         return types.SimpleNamespace(returncode=0, stdout="video\n")
 
     monkeypatch.setattr(PLAYER.subprocess, "run", fake_run)
 
     assert PLAYER.source_is_reachable("rtmp://192.168.102.6/play/salon1")
     assert calls[0][0] == "ffprobe"
+    assert calls[0][calls[0].index("-rw_timeout") + 1] == "8000000"
     assert calls[0][-1] == "rtmp://192.168.102.6/play/salon1"
+    assert options[0]["timeout"] == 9.0
 
 
 def test_stream_switch_uses_loadfile_on_existing_mpv(monkeypatch: pytest.MonkeyPatch) -> None:
