@@ -17,13 +17,25 @@ async function api(path, options = {}) {
     ...options,
   });
   if (!response.ok) {
-    const message = await response.json().then(x => x.detail).catch(() => `HTTP ${response.status}`);
+    const message = await response.json().then(x => formatApiError(x.detail, response.status)).catch(() => `HTTP ${response.status}`);
     const error = new Error(message || `HTTP ${response.status}`);
     error.status = response.status;
     throw error;
   }
   if (response.status === 204) return null;
   return response.json();
+}
+
+function formatApiError(detail, status) {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map(item => {
+      const location = Array.isArray(item.loc) ? item.loc.filter(part => part !== "body").join(".") : "";
+      return `${location ? `${location}: ` : ""}${item.msg || "Geçersiz değer"}`;
+    }).join("; ");
+  }
+  if (detail && typeof detail === "object") return detail.message || detail.msg || JSON.stringify(detail);
+  return `HTTP ${status}`;
 }
 
 function el(tag, className, text) {
@@ -273,7 +285,7 @@ function streamRow(stream = { id: "", enabled: true, seconds: 20, url: "" }, hea
   const enabled = document.createElement("input"); enabled.type = "checkbox"; enabled.checked = stream.enabled; enabled.className = "stream-enabled"; enabled.title = "Aktif";
   const id = document.createElement("input"); id.value = stream.id; id.placeholder = "Yayın ID"; id.className = "stream-id";
   const seconds = document.createElement("input"); seconds.type = "number"; seconds.min = "0"; seconds.max = "86400"; seconds.value = stream.seconds; seconds.className = "stream-seconds";
-  const url = document.createElement("input"); url.value = stream.url; url.placeholder = "https://…/index.m3u8"; url.className = "stream-url";
+  const url = document.createElement("input"); url.value = stream.url; url.placeholder = "http(s)://…/index.m3u8 veya rtmp://…"; url.className = "stream-url";
   const remove = el("button", "btn ghost remove", "×"); remove.title = "Yayını kaldır"; remove.onclick = () => row.remove();
   row.append(enabled, id, seconds, url, streamHealthView(stream, health), remove); return row;
 }

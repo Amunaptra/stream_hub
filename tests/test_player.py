@@ -58,6 +58,20 @@ def test_mpv_is_started_once_in_idle_keep_open_mode() -> None:
     assert not any(item.startswith("http") for item in PLAYER.MPV_COMMAND)
 
 
+def test_rtmp_source_precheck_uses_ffprobe(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> object:
+        calls.append(command)
+        return types.SimpleNamespace(returncode=0, stdout="video\n")
+
+    monkeypatch.setattr(PLAYER.subprocess, "run", fake_run)
+
+    assert PLAYER.source_is_reachable("rtmp://192.168.102.6/play/salon1")
+    assert calls[0][0] == "ffprobe"
+    assert calls[0][-1] == "rtmp://192.168.102.6/play/salon1"
+
+
 def test_stream_switch_uses_loadfile_on_existing_mpv(monkeypatch: pytest.MonkeyPatch) -> None:
     stream = PLAYER.StreamItem(
         id="next",

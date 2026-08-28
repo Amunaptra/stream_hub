@@ -1,6 +1,6 @@
 # Stream Hub
 
-Stream Hub, ağdaki Odroid tabanlı HLS yayın oynatıcılarını merkezi bir web panelinden keşfetmek, izlemek ve yönetmek için geliştirilen sistemdir.
+Stream Hub, ağdaki Odroid tabanlı HLS ve RTMP yayın oynatıcılarını merkezi bir web panelinden keşfetmek, izlemek ve yönetmek için geliştirilen sistemdir.
 
 > **Durum: v0.1.1 saha doğrulamalı kararlı sürüm**
 >
@@ -14,7 +14,7 @@ Sistem 15 Odroid cihazını merkezi olarak yönetmek üzere tasarlanmıştır. C
 ## Bileşenler
 
 - `device/agent`: Sürümlü cihaz API'si, güvenli config ve sağlık telemetrisi
-- `device/player`: Hub'dan bağımsız HLS oynatma döngüsü
+- `device/player`: Hub'dan bağımsız HLS/RTMP oynatma döngüsü
 - `device/installer`: Veri korumalı Odroid kurulumu, systemd ve journal sınırları
 - `hub/backend`: Cihaz envanteri, heartbeat, komut ve config yönetimi
 - `hub/ui`: Merkezi yönetim paneli
@@ -26,6 +26,8 @@ Cihaz çalışma katmanı, mDNS/sabit URL discovery, heartbeat, Hub cihaz envant
 cihaz isimlendirme, merkezi config senkronizasyonu, reboot/player-restart komut
 kuyruğu, yayın sağlık kontrolü ve merkezi web arayüzü tamamlandı. Her cihazın
 oynatma listesi en fazla 50 yayın bağlantısını destekler.
+Yayın adresleri `http://`, `https://`, `rtmp://` ve `rtmps://` protokollerini
+kabul eder. HLS sağlığı manifest içeriğiyle, RTMP sağlığı `ffprobe` ile ölçülür.
 
 Sahada doğrulanan başlıca akışlar:
 

@@ -11,9 +11,61 @@ from .storage import DeviceStore
 
 
 LOGGER = logging.getLogger("stream-agent.health")
+RTMP_PROBE_TIMEOUT_SECONDS = 5.0
+
+
+async def _check_rtmp_stream(stream: StreamItem) -> HealthItem:
+    started = time.monotonic()
+    process: asyncio.subprocess.Process | None = None
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "ffprobe",
+            "-v",
+            "error",
+            "-rw_timeout",
+            str(int(RTMP_PROBE_TIMEOUT_SECONDS * 1_000_000)),
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            stream.url,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(), timeout=RTMP_PROBE_TIMEOUT_SECONDS + 1
+        )
+        ok = process.returncode == 0 and bool(stdout.strip())
+        error = None
+        if not ok:
+            detail = stderr.decode("utf-8", errors="replace").strip()
+            error = detail[-500:] or "RTMP stream probe failed"
+    except asyncio.TimeoutError:
+        if process and process.returncode is None:
+            process.kill()
+            await process.wait()
+        ok = False
+        error = "RTMP stream probe timed out"
+    except (FileNotFoundError, OSError) as exc:
+        ok = False
+        error = type(exc).__name__
+
+    return HealthItem(
+        id=stream.id,
+        url=stream.url,
+        enabled=stream.enabled,
+        ok=ok,
+        status_code=None,
+        latency_ms=int((time.monotonic() - started) * 1000),
+        error=error,
+    )
 
 
 async def _check_stream(client: httpx.AsyncClient, stream: StreamItem) -> HealthItem:
+    if stream.url.lower().startswith(("rtmp://", "rtmps://")):
+        return await _check_rtmp_stream(stream)
+
     started = time.monotonic()
     status_code: int | None = None
     try:

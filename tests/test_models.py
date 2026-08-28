@@ -34,9 +34,21 @@ def test_playlist_rejects_duplicate_ids() -> None:
 
 
 @pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://host/file", "not-a-url"])
-def test_stream_rejects_non_http_urls(url: str) -> None:
-    with pytest.raises(ValidationError, match="http or https"):
+def test_stream_rejects_unsupported_urls(url: str) -> None:
+    with pytest.raises(ValidationError, match="http, https, rtmp or rtmps"):
         StreamItem(id="bad", url=url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "rtmp://192.168.102.6/play/salon1",
+        "rtmps://media.example/live/salon1",
+    ],
+)
+def test_device_and_hub_streams_accept_rtmp(url: str) -> None:
+    assert StreamItem(id="salon1", url=url).url == url
+    assert HubStreamItem(id="salon1", url=url).url == url
 
 
 def test_device_playlist_accepts_fifty_streams() -> None:

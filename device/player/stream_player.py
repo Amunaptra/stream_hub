@@ -113,6 +113,32 @@ def load_playlist() -> PlaylistConfig:
 
 
 def source_is_reachable(url: str, timeout: float = SOURCE_CHECK_TIMEOUT) -> bool:
+    if url.lower().startswith(("rtmp://", "rtmps://")):
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-rw_timeout",
+                    str(int(timeout * 1_000_000)),
+                    "-show_entries",
+                    "stream=codec_type",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    url,
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=timeout + 1,
+                check=False,
+                text=True,
+            )
+            return result.returncode == 0 and bool(result.stdout.strip())
+        except (FileNotFoundError, OSError, subprocess.TimeoutExpired, ValueError):
+            return False
+
     try:
         request = Request(url, headers={"User-Agent": "stream-hub-player/0.1"})
         with urlopen(request, timeout=timeout) as response:
