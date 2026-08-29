@@ -28,6 +28,10 @@ The v0.1.2 image supports HLS over HTTP/HTTPS and RTMP/RTMPS. RTMP source
 preflight and stream-health checks use the bundled `ffprobe` runtime before
 the persistent MPV process replaces the current stream.
 
+RTSP/RTSPS support was added after v0.1.2. A device flashed from the v0.1.2
+image must receive the newer Odroid package before RTSP addresses are sent to
+it. RTSP preflight and health checks use `ffprobe` with TCP transport.
+
 Default public-image accounts:
 
 - `root` / `odroid`

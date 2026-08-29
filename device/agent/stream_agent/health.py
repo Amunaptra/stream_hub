@@ -11,19 +11,30 @@ from .storage import DeviceStore
 
 
 LOGGER = logging.getLogger("stream-agent.health")
-RTMP_PROBE_TIMEOUT_SECONDS = 5.0
+FFPROBE_STREAM_SCHEMES = ("rtmp://", "rtmps://", "rtsp://", "rtsps://")
+FFPROBE_TIMEOUT_SECONDS = 8.0
 
 
-async def _check_rtmp_stream(stream: StreamItem) -> HealthItem:
+def _safe_probe_error(detail: str, stream_url: str, fallback: str) -> str:
+    sanitized = detail.replace(stream_url, "<stream-url>").strip()
+    return sanitized[-500:] or fallback
+
+
+async def _check_ffprobe_stream(stream: StreamItem) -> HealthItem:
     started = time.monotonic()
     process: asyncio.subprocess.Process | None = None
+    protocol = stream.url.split(":", 1)[0].upper()
+    input_options: list[str] = []
+    if stream.url.lower().startswith(("rtsp://", "rtsps://")):
+        input_options = ["-rtsp_transport", "tcp"]
     try:
         process = await asyncio.create_subprocess_exec(
             "ffprobe",
             "-v",
             "error",
+            *input_options,
             "-rw_timeout",
-            str(int(RTMP_PROBE_TIMEOUT_SECONDS * 1_000_000)),
+            str(int(FFPROBE_TIMEOUT_SECONDS * 1_000_000)),
             "-show_entries",
             "stream=codec_type",
             "-of",
@@ -34,19 +45,23 @@ async def _check_rtmp_stream(stream: StreamItem) -> HealthItem:
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await asyncio.wait_for(
-            process.communicate(), timeout=RTMP_PROBE_TIMEOUT_SECONDS + 1
+            process.communicate(), timeout=FFPROBE_TIMEOUT_SECONDS + 1
         )
         ok = process.returncode == 0 and bool(stdout.strip())
         error = None
         if not ok:
             detail = stderr.decode("utf-8", errors="replace").strip()
-            error = detail[-500:] or "RTMP stream probe failed"
+            error = _safe_probe_error(
+                detail,
+                stream.url,
+                f"{protocol} stream probe failed",
+            )
     except asyncio.TimeoutError:
         if process and process.returncode is None:
             process.kill()
             await process.wait()
         ok = False
-        error = "RTMP stream probe timed out"
+        error = f"{protocol} stream probe timed out"
     except (FileNotFoundError, OSError) as exc:
         ok = False
         error = type(exc).__name__
@@ -63,8 +78,8 @@ async def _check_rtmp_stream(stream: StreamItem) -> HealthItem:
 
 
 async def _check_stream(client: httpx.AsyncClient, stream: StreamItem) -> HealthItem:
-    if stream.url.lower().startswith(("rtmp://", "rtmps://")):
-        return await _check_rtmp_stream(stream)
+    if stream.url.lower().startswith(FFPROBE_STREAM_SCHEMES):
+        return await _check_ffprobe_stream(stream)
 
     started = time.monotonic()
     status_code: int | None = None

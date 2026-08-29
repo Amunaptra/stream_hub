@@ -8,8 +8,9 @@ Bu dizin Odroid üzerinde çalışan iki bağımsız servisi içerir:
 Player, Hub veya agent erişilemezken son geçerli `/etc/stream-hub/playlist.json` dosyasıyla çalışmaya devam eder.
 
 Playlist yayınları HLS için `http://`/`https://`, RTMP için
-`rtmp://`/`rtmps://` adreslerini destekler. RTMP kaynak ön kontrolü ve sağlık
-ölçümü kurulumla gelen `ffprobe` üzerinden yapılır.
+`rtmp://`/`rtmps://`, RTSP için `rtsp://`/`rtsps://` adreslerini destekler.
+RTMP ve RTSP kaynak ön kontrolü ile sağlık ölçümü kurulumla gelen `ffprobe`
+üzerinden yapılır. RTSP kontrolleri TCP taşımasını kullanır.
 
 ## Kurulum
 

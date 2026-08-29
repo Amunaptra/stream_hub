@@ -60,8 +60,12 @@ class HubStreamItem(BaseModel):
     @classmethod
     def validate_url(cls, value: str) -> str:
         value = value.strip()
-        if not value.lower().startswith(("http://", "https://", "rtmp://", "rtmps://")):
-            raise ValueError("stream URL must use http, https, rtmp or rtmps")
+        if not value.lower().startswith(
+            ("http://", "https://", "rtmp://", "rtmps://", "rtsp://", "rtsps://")
+        ):
+            raise ValueError(
+                "stream URL must use http, https, rtmp, rtmps, rtsp or rtsps"
+            )
         return value
 
 

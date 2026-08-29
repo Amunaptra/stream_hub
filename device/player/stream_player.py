@@ -29,9 +29,15 @@ SOURCE_CHECK_TIMEOUT = max(
     0.5,
     float(os.environ.get("STREAM_HUB_SOURCE_CHECK_TIMEOUT", "2")),
 )
-RTMP_SOURCE_CHECK_TIMEOUT = max(
+FFPROBE_STREAM_SCHEMES = ("rtmp://", "rtmps://", "rtsp://", "rtsps://")
+FFPROBE_SOURCE_CHECK_TIMEOUT = max(
     SOURCE_CHECK_TIMEOUT,
-    float(os.environ.get("STREAM_HUB_RTMP_SOURCE_CHECK_TIMEOUT", "8")),
+    float(
+        os.environ.get(
+            "STREAM_HUB_FFPROBE_SOURCE_CHECK_TIMEOUT",
+            os.environ.get("STREAM_HUB_RTMP_SOURCE_CHECK_TIMEOUT", "8"),
+        )
+    ),
 )
 STOP_REQUESTED = threading.Event()
 
@@ -117,14 +123,19 @@ def load_playlist() -> PlaylistConfig:
 
 
 def source_is_reachable(url: str, timeout: float = SOURCE_CHECK_TIMEOUT) -> bool:
-    if url.lower().startswith(("rtmp://", "rtmps://")):
-        probe_timeout = max(timeout, RTMP_SOURCE_CHECK_TIMEOUT)
+    lowered_url = url.lower()
+    if lowered_url.startswith(FFPROBE_STREAM_SCHEMES):
+        probe_timeout = max(timeout, FFPROBE_SOURCE_CHECK_TIMEOUT)
+        input_options: list[str] = []
+        if lowered_url.startswith(("rtsp://", "rtsps://")):
+            input_options = ["-rtsp_transport", "tcp"]
         try:
             result = subprocess.run(
                 [
                     "ffprobe",
                     "-v",
                     "error",
+                    *input_options,
                     "-rw_timeout",
                     str(int(probe_timeout * 1_000_000)),
                     "-show_entries",

@@ -285,7 +285,7 @@ function streamRow(stream = { id: "", enabled: true, seconds: 20, url: "" }, hea
   const enabled = document.createElement("input"); enabled.type = "checkbox"; enabled.checked = stream.enabled; enabled.className = "stream-enabled"; enabled.title = "Aktif";
   const id = document.createElement("input"); id.value = stream.id; id.placeholder = "Yayın ID"; id.className = "stream-id";
   const seconds = document.createElement("input"); seconds.type = "number"; seconds.min = "0"; seconds.max = "86400"; seconds.value = stream.seconds; seconds.className = "stream-seconds";
-  const url = document.createElement("input"); url.value = stream.url; url.placeholder = "http(s)://…/index.m3u8 veya rtmp://…"; url.className = "stream-url";
+  const url = document.createElement("input"); url.value = stream.url; url.placeholder = "http(s)://…, rtmp(s)://… veya rtsp(s)://…"; url.className = "stream-url"; url.autocomplete = "off"; url.spellcheck = false;
   const remove = el("button", "btn ghost remove", "×"); remove.title = "Yayını kaldır"; remove.onclick = () => row.remove();
   row.append(enabled, id, seconds, url, streamHealthView(stream, health), remove); return row;
 }

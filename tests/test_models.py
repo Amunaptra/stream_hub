@@ -35,7 +35,10 @@ def test_playlist_rejects_duplicate_ids() -> None:
 
 @pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://host/file", "not-a-url"])
 def test_stream_rejects_unsupported_urls(url: str) -> None:
-    with pytest.raises(ValidationError, match="http, https, rtmp or rtmps"):
+    with pytest.raises(
+        ValidationError,
+        match="http, https, rtmp, rtmps, rtsp or rtsps",
+    ):
         StreamItem(id="bad", url=url)
 
 
@@ -49,6 +52,19 @@ def test_stream_rejects_unsupported_urls(url: str) -> None:
 def test_device_and_hub_streams_accept_rtmp(url: str) -> None:
     assert StreamItem(id="salon1", url=url).url == url
     assert HubStreamItem(id="salon1", url=url).url == url
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "rtsp://camera.local:554/live/main",
+        "rtsp://viewer:secret@192.168.102.50:554/stream1",
+        "rtsps://camera.example/live/secure",
+    ],
+)
+def test_device_and_hub_streams_accept_rtsp(url: str) -> None:
+    assert StreamItem(id="camera1", url=url).url == url
+    assert HubStreamItem(id="camera1", url=url).url == url
 
 
 def test_device_playlist_accepts_fifty_streams() -> None:

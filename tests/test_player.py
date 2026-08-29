@@ -76,6 +76,25 @@ def test_rtmp_source_precheck_uses_ffprobe(monkeypatch: pytest.MonkeyPatch) -> N
     assert options[0]["timeout"] == 9.0
 
 
+def test_rtsp_source_precheck_uses_ffprobe_over_tcp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> object:
+        calls.append(command)
+        return types.SimpleNamespace(returncode=0, stdout="video\n")
+
+    monkeypatch.setattr(PLAYER.subprocess, "run", fake_run)
+
+    url = "rtsp://viewer:secret@192.168.102.50:554/stream1"
+    assert PLAYER.source_is_reachable(url)
+    assert calls[0][0] == "ffprobe"
+    assert calls[0][calls[0].index("-rtsp_transport") + 1] == "tcp"
+    assert calls[0][calls[0].index("-rw_timeout") + 1] == "8000000"
+    assert calls[0][-1] == url
+
+
 def test_stream_switch_uses_loadfile_on_existing_mpv(monkeypatch: pytest.MonkeyPatch) -> None:
     stream = PLAYER.StreamItem(
         id="next",

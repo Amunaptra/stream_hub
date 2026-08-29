@@ -1,6 +1,6 @@
 # Stream Hub
 
-Stream Hub, ağdaki Odroid tabanlı HLS ve RTMP yayın oynatıcılarını merkezi bir web panelinden keşfetmek, izlemek ve yönetmek için geliştirilen sistemdir.
+Stream Hub, ağdaki Odroid tabanlı HLS, RTMP ve RTSP yayın oynatıcılarını merkezi bir web panelinden keşfetmek, izlemek ve yönetmek için geliştirilen sistemdir.
 
 > **Durum: v0.1.2 saha doğrulamalı kararlı sürüm**
 >
@@ -16,7 +16,7 @@ Sistem 15 Odroid cihazını merkezi olarak yönetmek üzere tasarlanmıştır. C
 ## Bileşenler
 
 - `device/agent`: Sürümlü cihaz API'si, güvenli config ve sağlık telemetrisi
-- `device/player`: Hub'dan bağımsız HLS/RTMP oynatma döngüsü
+- `device/player`: Hub'dan bağımsız HLS/RTMP/RTSP oynatma döngüsü
 - `device/installer`: Veri korumalı Odroid kurulumu, systemd ve journal sınırları
 - `hub/backend`: Cihaz envanteri, heartbeat, komut ve config yönetimi
 - `hub/ui`: Merkezi yönetim paneli
@@ -28,8 +28,10 @@ Cihaz çalışma katmanı, mDNS/sabit URL discovery, heartbeat, Hub cihaz envant
 cihaz isimlendirme, merkezi config senkronizasyonu, reboot/player-restart komut
 kuyruğu, yayın sağlık kontrolü ve merkezi web arayüzü tamamlandı. Her cihazın
 oynatma listesi en fazla 50 yayın bağlantısını destekler.
-Yayın adresleri `http://`, `https://`, `rtmp://` ve `rtmps://` protokollerini
-kabul eder. HLS sağlığı manifest içeriğiyle, RTMP sağlığı `ffprobe` ile ölçülür.
+Yayın adresleri `http://`, `https://`, `rtmp://`, `rtmps://`, `rtsp://` ve
+`rtsps://` protokollerini kabul eder. HLS sağlığı manifest içeriğiyle;
+RTMP ve RTSP sağlığı `ffprobe` ile ölçülür. RTSP ön kontrolünde routed ağlarda
+daha kararlı davranması için TCP taşıması kullanılır.
 
 Sahada doğrulanan başlıca akışlar:
 
@@ -43,8 +45,9 @@ Sahada doğrulanan başlıca akışlar:
 - yedi gün/1 GB ile sınırlandırılmış cihaz logları;
 - cihaz ve yayın sağlık bilgilerinin web arayüzünde izlenmesi.
 
-Sürüm ayrıntıları için [v0.1.2 release notlarına](docs/releases/v0.1.2.md)
-bakın.
+Kararlı saha sürümü ayrıntıları için
+[v0.1.2 release notlarına](docs/releases/v0.1.2.md), RTSP güncellemesi için
+[v0.1.3 release notlarına](docs/releases/v0.1.3.md) bakın.
 
 Yerel doğrulama:
 
@@ -62,6 +65,8 @@ Klon güvenli golden-image üretimi için [docs/golden-image.md](docs/golden-ima
 dosyasına bakın. Canlı cihazdan alınmış özel disk imajları kimlik bilgileri
 içerebileceği için dağıtılmaz. v0.1.2 GitHub Release içinde ayrıca özel
 kimlikleri temizlenmiş ve default hesaplara döndürülmüş public Odroid C4 imajı
-bulunur. RTMP/RTMPS desteği için v0.1.2 veya daha yeni imajı kullanın.
+bulunur. RTMP/RTMPS desteği için v0.1.2 veya daha yeni imajı kullanın. RTSP ve
+RTSPS desteği, v0.1.2 imajının üzerine güncel Odroid paketinin kurulmasını veya
+RTSP destekli daha yeni bir imajı gerektirir.
 
 Proje kararları ve public ilerleme kayıtları için [stream_hub_change_log.md](stream_hub_change_log.md) dosyasına bakın.
