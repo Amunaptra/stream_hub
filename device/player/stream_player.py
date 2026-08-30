@@ -39,6 +39,15 @@ FFPROBE_SOURCE_CHECK_TIMEOUT = max(
         )
     ),
 )
+PLAYBACK_POLL_SECONDS = max(
+    0.25,
+    float(os.environ.get("STREAM_HUB_PLAYBACK_POLL_SECONDS", "1")),
+)
+PLAYBACK_STALL_SECONDS = max(
+    3.0,
+    float(os.environ.get("STREAM_HUB_PLAYBACK_STALL_SECONDS", "6")),
+)
+PLAYBACK_PROGRESS_EPSILON = 0.02
 STOP_REQUESTED = threading.Event()
 
 MPV_COMMAND = [
@@ -201,6 +210,11 @@ class PersistentMpv:
             process.wait(timeout=2)
         MPV_SOCKET.unlink(missing_ok=True)
 
+    def restart(self) -> None:
+        self.stop()
+        if not STOP_REQUESTED.is_set():
+            self.start()
+
     def send(self, command: list[Any], timeout: float = 3) -> None:
         process = self.process
         if process is None or process.poll() is not None:
@@ -248,23 +262,69 @@ class PersistentMpv:
         return bool(self.get_property("idle-active"))
 
 
-def wait_for_stream_duration(player: PersistentMpv, seconds: int) -> None:
-    if seconds == 0:
-        while not STOP_REQUESTED.wait(1):
-            try:
-                if player.idle():
-                    return
-            except Exception as exc:
-                LOGGER.warning("mpv idle check failed error=%s", type(exc).__name__)
-                return
-        return
+def wait_for_stream_duration(player: PersistentMpv, seconds: int) -> str:
+    started_at = time.monotonic()
+    deadline = started_at + seconds if seconds > 0 else None
+    last_progress_at = started_at
+    last_position: float | None = None
 
-    deadline = time.monotonic() + seconds
     while not STOP_REQUESTED.is_set():
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            return
-        STOP_REQUESTED.wait(min(0.25, remaining))
+        now = time.monotonic()
+        if deadline is not None and now >= deadline:
+            return "duration"
+
+        try:
+            if player.idle():
+                return "idle"
+        except Exception as exc:
+            LOGGER.warning("mpv playback check failed error=%s", type(exc).__name__)
+            return "unavailable"
+
+        position_error: Exception | None = None
+        try:
+            raw_position = player.get_property("time-pos")
+            position = (
+                float(raw_position)
+                if isinstance(raw_position, (int, float))
+                else None
+            )
+        except Exception as exc:
+            position = None
+            position_error = exc
+
+        now = time.monotonic()
+        if position is not None:
+            progressed = (
+                last_position is None
+                or position > last_position + PLAYBACK_PROGRESS_EPSILON
+                or position < last_position - 1.0
+            )
+            if progressed:
+                last_position = position
+                last_progress_at = now
+
+        stalled_for = now - last_progress_at
+        if stalled_for >= PLAYBACK_STALL_SECONDS:
+            if position_error is not None:
+                LOGGER.warning(
+                    "mpv playback position unavailable error=%s stalled_seconds=%.1f",
+                    type(position_error).__name__,
+                    stalled_for,
+                )
+                return "unavailable"
+            LOGGER.warning(
+                "mpv playback stalled position=%s stalled_seconds=%.1f",
+                position,
+                stalled_for,
+            )
+            return "stalled"
+
+        wait_seconds = PLAYBACK_POLL_SECONDS
+        if deadline is not None:
+            wait_seconds = min(wait_seconds, max(0.0, deadline - now))
+        STOP_REQUESTED.wait(wait_seconds)
+
+    return "stopped"
 
 
 def request_stop(_signum: int, _frame: object) -> None:
@@ -338,7 +398,23 @@ def main() -> int:
                 stream.seconds,
                 load_ms,
             )
-            wait_for_stream_duration(player, stream.seconds)
+            playback_result = wait_for_stream_duration(player, stream.seconds)
+            if playback_result in {"stalled", "unavailable"}:
+                write_state(
+                    "reconnecting",
+                    stream,
+                    message=f"playback {playback_result}",
+                )
+                LOGGER.warning(
+                    "restarting mpv after playback failure stream=%s reason=%s",
+                    stream.id,
+                    playback_result,
+                )
+                try:
+                    player.restart()
+                except Exception as exc:
+                    LOGGER.error("mpv restart failed error=%s", type(exc).__name__)
+                    return 3
     finally:
         player.stop()
         write_state("stopped")

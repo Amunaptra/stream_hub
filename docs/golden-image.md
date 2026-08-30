@@ -19,18 +19,20 @@ capture to a public repository or release. A separately sanitized public image
 must remove every deployment-specific credential and pass a dedicated security
 audit before distribution.
 
-The v0.1.2 public release image is a separate sanitized derivative. It is not
+The v0.1.4 public release image is a separate sanitized derivative. It is not
 the private field image. Its device token, command cache, authorized keys, SSH
 host keys, machine ID, logs, histories, leases, and deleted free-space data
-were cleared before release.
+were cleared before release. Legacy player code and operational stream
+configuration inherited by the older base image were also removed.
 
-The v0.1.2 image supports HLS over HTTP/HTTPS and RTMP/RTMPS. RTMP source
+The v0.1.4 image supports HLS over HTTP/HTTPS, RTMP/RTMPS, and RTSP/RTSPS.
+RTMP source
 preflight and stream-health checks use the bundled `ffprobe` runtime before
 the persistent MPV process replaces the current stream.
 
-RTSP/RTSPS support was added after v0.1.2. A device flashed from the v0.1.2
-image must receive the newer Odroid package before RTSP addresses are sent to
-it. RTSP preflight and health checks use `ffprobe` with TCP transport.
+RTSP preflight and health checks use `ffprobe` with TCP transport. A playback
+watchdog restarts MPV and reloads the current item when playback progress
+stalls, while preserving the persistent-player clean-transition design.
 
 Default public-image accounts:
 

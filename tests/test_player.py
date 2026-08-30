@@ -121,7 +121,91 @@ def test_zero_duration_waits_until_mpv_becomes_idle(
 ) -> None:
     player = PLAYER.PersistentMpv()
     idle_values = iter([False, False, True])
+    positions = iter([1.0, 2.0])
     player.idle = types.MethodType(lambda _self: next(idle_values), player)
+    player.get_property = types.MethodType(
+        lambda _self, _name, timeout=3: next(positions),
+        player,
+    )
     monkeypatch.setattr(PLAYER.STOP_REQUESTED, "wait", lambda _timeout: False)
 
-    PLAYER.wait_for_stream_duration(player, 0)
+    assert PLAYER.wait_for_stream_duration(player, 0) == "idle"
+
+
+def test_zero_duration_detects_frozen_playback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    player = PLAYER.PersistentMpv()
+    clock = [0.0]
+    player.idle = types.MethodType(lambda _self: False, player)
+    player.get_property = types.MethodType(
+        lambda _self, _name, timeout=3: 42.0,
+        player,
+    )
+    monkeypatch.setattr(PLAYER, "PLAYBACK_STALL_SECONDS", 3.0)
+    monkeypatch.setattr(PLAYER, "PLAYBACK_POLL_SECONDS", 1.0)
+    monkeypatch.setattr(PLAYER.time, "monotonic", lambda: clock[0])
+
+    def advance(timeout: float) -> bool:
+        clock[0] += timeout
+        return False
+
+    monkeypatch.setattr(PLAYER.STOP_REQUESTED, "wait", advance)
+
+    assert PLAYER.wait_for_stream_duration(player, 0) == "stalled"
+    assert clock[0] == 3.0
+
+
+def test_startup_tolerates_time_position_becoming_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    player = PLAYER.PersistentMpv()
+    clock = [0.0]
+    results: list[object] = [RuntimeError("not ready"), 1.0, 2.0]
+    player.idle = types.MethodType(lambda _self: False, player)
+
+    def delayed_position(_self: object, _name: str, timeout: float = 3) -> float:
+        value = results.pop(0)
+        if isinstance(value, Exception):
+            raise value
+        return float(value)
+
+    player.get_property = types.MethodType(delayed_position, player)
+    monkeypatch.setattr(PLAYER, "PLAYBACK_STALL_SECONDS", 3.0)
+    monkeypatch.setattr(PLAYER, "PLAYBACK_POLL_SECONDS", 1.0)
+    monkeypatch.setattr(PLAYER.time, "monotonic", lambda: clock[0])
+
+    def advance(timeout: float) -> bool:
+        clock[0] += timeout
+        return clock[0] >= 3.0
+
+    monkeypatch.setattr(PLAYER.STOP_REQUESTED, "wait", advance)
+
+    assert PLAYER.wait_for_stream_duration(player, 3) == "duration"
+    assert not results
+
+
+def test_finite_duration_keeps_watchdog_and_returns_on_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    player = PLAYER.PersistentMpv()
+    clock = [0.0]
+    position = [0.0]
+    player.idle = types.MethodType(lambda _self: False, player)
+
+    def advancing_position(_self: object, _name: str, timeout: float = 3) -> float:
+        position[0] += 1.0
+        return position[0]
+
+    player.get_property = types.MethodType(advancing_position, player)
+    monkeypatch.setattr(PLAYER, "PLAYBACK_POLL_SECONDS", 1.0)
+    monkeypatch.setattr(PLAYER.time, "monotonic", lambda: clock[0])
+
+    def advance(timeout: float) -> bool:
+        clock[0] += timeout
+        return False
+
+    monkeypatch.setattr(PLAYER.STOP_REQUESTED, "wait", advance)
+
+    assert PLAYER.wait_for_stream_duration(player, 3) == "duration"
+    assert clock[0] == 3.0

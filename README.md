@@ -2,14 +2,15 @@
 
 Stream Hub, ağdaki Odroid tabanlı HLS, RTMP ve RTSP yayın oynatıcılarını merkezi bir web panelinden keşfetmek, izlemek ve yönetmek için geliştirilen sistemdir.
 
-> **Durum: v0.1.2 saha doğrulamalı kararlı sürüm**
+> **Durum: v0.1.4 saha doğrulamalı kararlı sürüm**
 >
 > Odroid C4, Ubuntu 22.04/aarch64 ve TrueNAS SCALE üzerinde gerçek cihazlarla
 > kurulum, golden-image klonlama, merkezi config, reboot ve yayın oynatma
 > akışları doğrulandı. 13 cihazlık canlı filoda tek kalıcı MPV süreci ve IPC
 > `loadfile replace` ile siyah ekransız yayın geçişi devreye alındı. v0.1.2 ile
 > HLS yanında RTMP/RTMPS config, kaynak ön kontrolü ve sağlık ölçümü canlıda
-> doğrulandı.
+> doğrulandı. v0.1.4 ile RTSP/TCP saha kabulü ve donmuş yayın oturumunu yaklaşık
+> dokuz saniye içinde otomatik yeniden bağlayan playback watchdog tamamlandı.
 
 Sistem 15 Odroid cihazını merkezi olarak yönetmek üzere tasarlanmıştır. Cihazlar Hub olmasa da son geçerli oynatma listesiyle bağımsız çalışmaya devam eder.
 
@@ -46,8 +47,9 @@ Sahada doğrulanan başlıca akışlar:
 - cihaz ve yayın sağlık bilgilerinin web arayüzünde izlenmesi.
 
 Kararlı saha sürümü ayrıntıları için
-[v0.1.2 release notlarına](docs/releases/v0.1.2.md), RTSP güncellemesi için
-[v0.1.3 release notlarına](docs/releases/v0.1.3.md) bakın.
+[v0.1.4 release notlarına](docs/releases/v0.1.4.md), önceki imaj ve RTSP
+güncellemeleri için [v0.1.2](docs/releases/v0.1.2.md) ve
+[v0.1.3](docs/releases/v0.1.3.md) notlarına bakın.
 
 Yerel doğrulama:
 
@@ -63,10 +65,9 @@ Bağımsız Odroid ve Hub dağıtım arşivlerini üretme ve tek komutla kurma b
 
 Klon güvenli golden-image üretimi için [docs/golden-image.md](docs/golden-image.md)
 dosyasına bakın. Canlı cihazdan alınmış özel disk imajları kimlik bilgileri
-içerebileceği için dağıtılmaz. v0.1.2 GitHub Release içinde ayrıca özel
+içerebileceği için dağıtılmaz. v0.1.4 GitHub Release içinde ayrıca özel
 kimlikleri temizlenmiş ve default hesaplara döndürülmüş public Odroid C4 imajı
-bulunur. RTMP/RTMPS desteği için v0.1.2 veya daha yeni imajı kullanın. RTSP ve
-RTSPS desteği, v0.1.2 imajının üzerine güncel Odroid paketinin kurulmasını veya
-RTSP destekli daha yeni bir imajı gerektirir.
+bulunur. Bu imaj HLS, RTMP/RTMPS, RTSP/RTSPS, siyah ekransız geçiş ve otomatik
+donma/reconnect watchdog özelliklerini birlikte içerir.
 
 Proje kararları ve public ilerleme kayıtları için [stream_hub_change_log.md](stream_hub_change_log.md) dosyasına bakın.
