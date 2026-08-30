@@ -6,7 +6,7 @@ import json
 import httpx
 
 from stream_agent.heartbeat import HeartbeatWorker
-from stream_agent.models import PlayerState
+from stream_agent.models import HealthItem, PlayerState
 from stream_agent.settings import Settings
 from stream_agent.storage import DeviceStore
 
@@ -52,6 +52,20 @@ class HeartbeatController:
         return True, "reboot requested"
 
 
+class CachedHealth:
+    def snapshot(self):
+        return [
+            HealthItem(
+                id="salon-1",
+                url="http://media/salon-1.m3u8",
+                enabled=True,
+                ok=True,
+                status_code=200,
+                latency_ms=42,
+            )
+        ]
+
+
 def test_heartbeat_uses_unique_device_token_and_reports_status(tmp_path) -> None:
     settings = Settings(
         data_dir=tmp_path / "data",
@@ -60,7 +74,9 @@ def test_heartbeat_uses_unique_device_token_and_reports_status(tmp_path) -> None
     )
     store = DeviceStore(settings)
     identity = store.load_or_create_identity()
-    worker = HeartbeatWorker(settings, identity, store, HeartbeatController())
+    worker = HeartbeatWorker(
+        settings, identity, store, HeartbeatController(), CachedHealth()
+    )
     captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -85,6 +101,9 @@ def test_heartbeat_uses_unique_device_token_and_reports_status(tmp_path) -> None
     assert captured["payload"]["device_id"] == identity.device_id
     assert captured["payload"]["reported_config"]["revision"] == 0
     assert captured["payload"]["status"]["disk_free_bytes"] == 6_000_000_000
+    assert captured["payload"]["stream_health"][0]["id"] == "salon-1"
+    assert captured["payload"]["stream_health"][0]["status_code"] == 200
+    assert captured["payload"]["stream_health"][0]["latency_ms"] == 42
 
 
 def test_heartbeat_applies_config_executes_commands_and_reports_results(tmp_path) -> None:

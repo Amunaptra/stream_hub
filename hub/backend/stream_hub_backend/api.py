@@ -22,9 +22,12 @@ from .database import (
 from .discovery import HubAdvertiser
 from .models import (
     ApprovalResult,
+    AdminCredentialsUpdate,
+    AdminProfile,
     AdminSessionRequest,
     AdminSessionResponse,
     DeviceRecord,
+    DeviceNameUpdate,
     HubCommandRecord,
     HubCommandRequest,
     HubCommandResult,
@@ -33,6 +36,7 @@ from .models import (
     HubHeartbeatResponse,
     HubPlaylistConfig,
     HubPlaylistDraft,
+    HubStreamHealth,
 )
 from .settings import HubSettings
 
@@ -49,7 +53,7 @@ def create_app(settings: HubSettings) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         nonlocal advertiser
-        database.initialize()
+        database.initialize(settings.admin_username, settings.admin_password)
         if settings.advertise_mdns:
             try:
                 advertiser = HubAdvertiser(settings.port)
@@ -69,47 +73,54 @@ def create_app(settings: HubSettings) -> FastAPI:
     app.state.settings = settings
     app.state.database = database
 
-    def make_session() -> str:
-        payload = f"admin|{int(time.time()) + SESSION_SECONDS}".encode("ascii")
+    def make_session(username: str) -> str:
+        _, session_secret = database.admin_session_identity()
+        payload = f"{username}|{int(time.time()) + SESSION_SECONDS}".encode("ascii")
         encoded = base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
         signature = hmac.new(
-            settings.admin_token.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256
+            session_secret.encode("utf-8"), encoded.encode("ascii"), hashlib.sha256
         ).hexdigest()
         return f"{encoded}.{signature}"
 
     def verify_session(value: str) -> bool:
         try:
             encoded, signature = value.split(".", 1)
+            current_username, session_secret = database.admin_session_identity()
             expected = hmac.new(
-                settings.admin_token.encode("utf-8"),
+                session_secret.encode("utf-8"),
                 encoded.encode("ascii"),
                 hashlib.sha256,
             ).hexdigest()
             if not hmac.compare_digest(signature, expected):
                 return False
             padding = "=" * ((4 - len(encoded) % 4) % 4)
-            role, expires = base64.urlsafe_b64decode(encoded + padding).decode("ascii").split("|", 1)
-            return role == "admin" and int(expires) > int(time.time())
+            username, expires = base64.urlsafe_b64decode(encoded + padding).decode("ascii").split("|", 1)
+            return secrets.compare_digest(username, current_username) and int(expires) > int(time.time())
         except (ValueError, TypeError):
             return False
 
-    def require_admin_token(
+    def require_admin_session(
         request: Request,
         authorization: Annotated[str | None, Header()] = None,
     ) -> None:
-        scheme, _, token = (authorization or "").partition(" ")
-        bearer_valid = scheme.lower() == "bearer" and secrets.compare_digest(
-            token, settings.admin_token
-        )
+        basic_valid = False
+        scheme, _, value = (authorization or "").partition(" ")
+        if scheme.lower() == "basic":
+            try:
+                decoded = base64.b64decode(value, validate=True).decode("utf-8")
+                username, password = decoded.split(":", 1)
+                basic_valid = database.authenticate_admin(username, password)
+            except (ValueError, UnicodeDecodeError):
+                basic_valid = False
         cookie_valid = verify_session(request.cookies.get(SESSION_COOKIE, ""))
-        if not (bearer_valid or cookie_valid):
+        if not (basic_valid or cookie_valid):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="valid Hub administrator token required",
-                headers={"WWW-Authenticate": "Bearer"},
+                detail="valid Hub administrator session required",
+                headers={"WWW-Authenticate": "Basic"},
             )
 
-    admin = [Depends(require_admin_token)]
+    admin = [Depends(require_admin_session)]
 
     def device_token(authorization: str | None) -> str:
         scheme, _, token = (authorization or "").partition(" ")
@@ -123,11 +134,11 @@ def create_app(settings: HubSettings) -> FastAPI:
 
     @app.post("/api/v1/session", response_model=AdminSessionResponse)
     def login(body: AdminSessionRequest, response: Response) -> AdminSessionResponse:
-        if not secrets.compare_digest(body.token, settings.admin_token):
-            raise HTTPException(status_code=401, detail="invalid administrator token")
+        if not database.authenticate_admin(body.username, body.password):
+            raise HTTPException(status_code=401, detail="invalid username or password")
         response.set_cookie(
             SESSION_COOKIE,
-            make_session(),
+            make_session(body.username),
             max_age=SESSION_SECONDS,
             httponly=True,
             samesite="strict",
@@ -137,6 +148,32 @@ def create_app(settings: HubSettings) -> FastAPI:
 
     @app.delete("/api/v1/session", response_model=AdminSessionResponse)
     def logout(response: Response) -> AdminSessionResponse:
+        response.delete_cookie(SESSION_COOKIE)
+        return AdminSessionResponse()
+
+    @app.get(
+        "/api/v1/admin/profile",
+        response_model=AdminProfile,
+        dependencies=admin,
+    )
+    def admin_profile() -> AdminProfile:
+        username, _ = database.admin_session_identity()
+        return AdminProfile(username=username)
+
+    @app.put(
+        "/api/v1/admin/credentials",
+        response_model=AdminSessionResponse,
+        dependencies=admin,
+    )
+    def update_admin_credentials(
+        body: AdminCredentialsUpdate, response: Response
+    ) -> AdminSessionResponse:
+        try:
+            database.update_admin_credentials(
+                body.current_password, body.username, body.new_password
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         response.delete_cookie(SESSION_COOKIE)
         return AdminSessionResponse()
 
@@ -190,6 +227,17 @@ def create_app(settings: HubSettings) -> FastAPI:
         except DeviceNotFoundError as exc:
             raise HTTPException(status_code=404, detail="device not found") from exc
 
+    @app.get(
+        "/api/v1/devices/{device_id}/stream-health",
+        response_model=list[HubStreamHealth],
+        dependencies=admin,
+    )
+    def stream_health(device_id: str) -> list[HubStreamHealth]:
+        try:
+            return database.stream_health(device_id)
+        except DeviceNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="device not found") from exc
+
     @app.post(
         "/api/v1/devices/{device_id}/approve",
         response_model=ApprovalResult,
@@ -201,6 +249,18 @@ def create_app(settings: HubSettings) -> FastAPI:
         except DeviceNotFoundError as exc:
             raise HTTPException(status_code=404, detail="device not found") from exc
         return ApprovalResult(ok=True, device_id=device_id, approved=True)
+
+    @app.put(
+        "/api/v1/devices/{device_id}/name",
+        response_model=DeviceRecord,
+        dependencies=admin,
+    )
+    def set_device_name(device_id: str, body: DeviceNameUpdate) -> DeviceRecord:
+        try:
+            database.set_display_name(device_id, body.display_name)
+            return database.get(device_id, settings.offline_after_seconds)
+        except DeviceNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="device not found") from exc
 
     @app.put(
         "/api/v1/devices/{device_id}/config",

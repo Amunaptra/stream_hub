@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from stream_hub_backend.models import HubPlaylistDraft, HubStreamItem
 from stream_agent.models import PlaylistConfig, StreamItem
 
 
@@ -33,15 +34,70 @@ def test_playlist_rejects_duplicate_ids() -> None:
 
 
 @pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://host/file", "not-a-url"])
-def test_stream_rejects_non_http_urls(url: str) -> None:
-    with pytest.raises(ValidationError, match="http or https"):
+def test_stream_rejects_unsupported_urls(url: str) -> None:
+    with pytest.raises(
+        ValidationError,
+        match="http, https, rtmp, rtmps, rtsp or rtsps",
+    ):
         StreamItem(id="bad", url=url)
 
 
-def test_playlist_rejects_more_than_forty_streams() -> None:
+@pytest.mark.parametrize(
+    "url",
+    [
+        "rtmp://192.168.102.6/play/salon1",
+        "rtmps://media.example/live/salon1",
+    ],
+)
+def test_device_and_hub_streams_accept_rtmp(url: str) -> None:
+    assert StreamItem(id="salon1", url=url).url == url
+    assert HubStreamItem(id="salon1", url=url).url == url
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "rtsp://camera.local:554/live/main",
+        "rtsp://viewer:secret@192.168.102.50:554/stream1",
+        "rtsps://camera.example/live/secure",
+    ],
+)
+def test_device_and_hub_streams_accept_rtsp(url: str) -> None:
+    assert StreamItem(id="camera1", url=url).url == url
+    assert HubStreamItem(id="camera1", url=url).url == url
+
+
+def test_device_playlist_accepts_fifty_streams() -> None:
     streams = [
         StreamItem(id=f"stream-{index}", url=f"http://media/{index}.m3u8")
-        for index in range(41)
+        for index in range(50)
+    ]
+
+    assert len(PlaylistConfig(streams=streams).streams) == 50
+
+
+def test_device_playlist_rejects_more_than_fifty_streams() -> None:
+    streams = [
+        StreamItem(id=f"stream-{index}", url=f"http://media/{index}.m3u8")
+        for index in range(51)
     ]
     with pytest.raises(ValidationError):
         PlaylistConfig(streams=streams)
+
+
+def test_hub_playlist_accepts_fifty_streams() -> None:
+    streams = [
+        HubStreamItem(id=f"stream-{index}", url=f"http://media/{index}.m3u8")
+        for index in range(50)
+    ]
+
+    assert len(HubPlaylistDraft(streams=streams).streams) == 50
+
+
+def test_hub_playlist_rejects_more_than_fifty_streams() -> None:
+    streams = [
+        HubStreamItem(id=f"stream-{index}", url=f"http://media/{index}.m3u8")
+        for index in range(51)
+    ]
+    with pytest.raises(ValidationError):
+        HubPlaylistDraft(streams=streams)

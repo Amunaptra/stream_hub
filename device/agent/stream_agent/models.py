@@ -16,15 +16,19 @@ class StreamItem(BaseModel):
     @classmethod
     def validate_url(cls, value: str) -> str:
         value = value.strip()
-        if not value.lower().startswith(("http://", "https://")):
-            raise ValueError("stream URL must use http or https")
+        if not value.lower().startswith(
+            ("http://", "https://", "rtmp://", "rtmps://", "rtsp://", "rtsps://")
+        ):
+            raise ValueError(
+                "stream URL must use http, https, rtmp, rtmps, rtsp or rtsps"
+            )
         return value
 
 
 class PlaylistConfig(BaseModel):
     revision: int = Field(default=0, ge=0)
     default_seconds: int = Field(default=20, ge=0, le=86_400)
-    streams: list[StreamItem] = Field(default_factory=list, max_length=40)
+    streams: list[StreamItem] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def unique_stream_ids(self) -> "PlaylistConfig":
@@ -96,6 +100,7 @@ class HealthItem(BaseModel):
     status_code: int | None = None
     latency_ms: int
     error: str | None = None
+    checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class HeartbeatPayload(BaseModel):
@@ -105,6 +110,7 @@ class HeartbeatPayload(BaseModel):
     agent_port: int
     status: DeviceStatus
     reported_config: PlaylistConfig
+    stream_health: list[HealthItem] = Field(default_factory=list, max_length=50)
 
 
 class HeartbeatResponse(BaseModel):
