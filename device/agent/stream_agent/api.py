@@ -37,7 +37,9 @@ def create_app(
     controller = controller or SystemController(settings)
 
     health_monitor = StreamHealthMonitor(
-        store, settings.stream_health_interval_seconds
+        store,
+        settings.stream_health_interval_seconds,
+        phase_key=identity.device_id,
     )
     heartbeat = HeartbeatWorker(
         settings, identity, store, controller, health_monitor

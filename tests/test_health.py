@@ -74,3 +74,41 @@ def test_rtsp_health_error_does_not_expose_url_credentials(monkeypatch) -> None:
     assert result.ok is False
     assert result.error == "Unable to open <stream-url>: unauthorized"
     assert "secret" not in result.error
+
+
+def test_health_initial_delay_is_stable_and_bounded() -> None:
+    first = health.deterministic_initial_delay("odroid-test-1", 300.0)
+    second = health.deterministic_initial_delay("odroid-test-1", 300.0)
+
+    assert first == second
+    assert 0.0 <= first < 300.0
+    assert health.deterministic_initial_delay("", 300.0) == 0.0
+
+
+def test_health_monitor_waits_for_device_phase_before_first_probe(monkeypatch) -> None:
+    events: list[tuple[str, float | None]] = []
+
+    class FakeStore:
+        pass
+
+    monitor = health.StreamHealthMonitor(
+        FakeStore(), interval_seconds=300.0, phase_key="odroid-test-2"
+    )
+
+    async def fake_refresh() -> list[object]:
+        events.append(("refresh", None))
+        raise asyncio.CancelledError
+
+    async def fake_sleep(seconds: float) -> None:
+        events.append(("sleep", seconds))
+
+    monkeypatch.setattr(monitor, "refresh", fake_refresh)
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    try:
+        asyncio.run(monitor.run())
+    except asyncio.CancelledError:
+        pass
+
+    assert events[0] == ("sleep", monitor.initial_delay_seconds)
+    assert events[1] == ("refresh", None)

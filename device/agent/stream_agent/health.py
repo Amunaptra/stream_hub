@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 
@@ -13,6 +14,16 @@ from .storage import DeviceStore
 LOGGER = logging.getLogger("stream-agent.health")
 FFPROBE_STREAM_SCHEMES = ("rtmp://", "rtmps://", "rtsp://", "rtsps://")
 FFPROBE_TIMEOUT_SECONDS = 8.0
+STREAM_HEALTH_MAX_CONCURRENCY = 2
+
+
+def deterministic_initial_delay(phase_key: str, interval_seconds: float) -> float:
+    """Spread device probes across the interval without random drift."""
+    if not phase_key:
+        return 0.0
+    digest = hashlib.sha256(phase_key.encode("utf-8")).digest()
+    ratio = int.from_bytes(digest[:8], "big") / float(1 << 64)
+    return ratio * max(0.0, interval_seconds)
 
 
 def _safe_probe_error(detail: str, stream_url: str, fallback: str) -> str:
@@ -115,14 +126,17 @@ async def _check_stream(client: httpx.AsyncClient, stream: StreamItem) -> Health
 
 async def check_playlist(playlist: PlaylistConfig) -> list[HealthItem]:
     streams = [stream for stream in playlist.streams if stream.enabled]
-    limits = httpx.Limits(max_connections=6, max_keepalive_connections=3)
+    limits = httpx.Limits(
+        max_connections=STREAM_HEALTH_MAX_CONCURRENCY,
+        max_keepalive_connections=STREAM_HEALTH_MAX_CONCURRENCY,
+    )
     timeout = httpx.Timeout(3.0, connect=1.0)
     async with httpx.AsyncClient(
         timeout=timeout,
         limits=limits,
         follow_redirects=False,
     ) as client:
-        semaphore = asyncio.Semaphore(6)
+        semaphore = asyncio.Semaphore(STREAM_HEALTH_MAX_CONCURRENCY)
 
         async def limited(stream: StreamItem) -> HealthItem:
             async with semaphore:
@@ -132,9 +146,17 @@ async def check_playlist(playlist: PlaylistConfig) -> list[HealthItem]:
 
 
 class StreamHealthMonitor:
-    def __init__(self, store: DeviceStore, interval_seconds: float = 60.0):
+    def __init__(
+        self,
+        store: DeviceStore,
+        interval_seconds: float = 300.0,
+        phase_key: str = "",
+    ):
         self.store = store
         self.interval_seconds = max(15.0, interval_seconds)
+        self.initial_delay_seconds = deterministic_initial_delay(
+            phase_key, self.interval_seconds
+        )
         self._results: list[HealthItem] = []
         self._lock = asyncio.Lock()
 
@@ -148,6 +170,13 @@ class StreamHealthMonitor:
             return self.snapshot()
 
     async def run(self) -> None:
+        if self.initial_delay_seconds > 0:
+            LOGGER.info(
+                "stream health initial delay seconds=%.1f interval_seconds=%.1f",
+                self.initial_delay_seconds,
+                self.interval_seconds,
+            )
+            await asyncio.sleep(self.initial_delay_seconds)
         while True:
             started = time.monotonic()
             try:
