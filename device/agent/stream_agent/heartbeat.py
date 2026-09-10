@@ -8,6 +8,7 @@ import httpx
 
 from . import __version__
 from .discovery import discover_hub
+from .health import StreamHealthMonitor
 from .models import DeviceIdentity, HeartbeatPayload, HeartbeatResponse
 from .settings import Settings
 from .storage import DeviceStore
@@ -25,12 +26,15 @@ class HeartbeatWorker:
         identity: DeviceIdentity,
         store: DeviceStore,
         controller: SystemController,
+        health_monitor: StreamHealthMonitor | None = None,
     ):
         self.settings = settings
         self.identity = identity
         self.store = store
         self.controller = controller
+        self.health_monitor = health_monitor
         self.hub_url = settings.hub_url
+        self.configured_hub_url = settings.hub_url
         self._last_error: str | None = None
 
     async def resolve_hub(self) -> str | None:
@@ -54,6 +58,9 @@ class HeartbeatWorker:
             agent_port=self.settings.agent_port,
             status=status,
             reported_config=self.store.load_playlist(),
+            stream_health=(
+                self.health_monitor.snapshot() if self.health_monitor else []
+            ),
         )
 
     async def send_once(self, client: httpx.AsyncClient) -> HeartbeatResponse | None:
@@ -129,18 +136,38 @@ class HeartbeatWorker:
                 )
 
         for command in result.commands:
+            next_hub_url: str | None = None
             cached = self.store.command_result(command.command_id)
             if cached:
                 ok, message = cached
+                if ok and command.command == "hub_url_change":
+                    next_hub_url = command.hub_url
             elif command.command == "player_restart":
                 ok, message = self.controller.restart_player()
                 self.store.save_command_result(command.command_id, ok, message)
-            else:
+            elif command.command == "reboot":
                 ok, message = self.controller.reboot()
+                self.store.save_command_result(command.command_id, ok, message)
+            else:
+                try:
+                    target = command.hub_url or ""
+                    response = await client.get(f"{target}/healthz")
+                    response.raise_for_status()
+                    if response.json() != {"ok": True}:
+                        raise ValueError("unexpected Hub health response")
+                    self.store.save_hub_url(target)
+                    ok, message = True, f"Hub address saved: {target}"
+                    next_hub_url = target
+                except Exception as exc:
+                    ok = False
+                    message = f"Hub address test failed: {type(exc).__name__}"
                 self.store.save_command_result(command.command_id, ok, message)
             await self._report_command(
                 client, hub_url, command.command_id, ok, message
             )
+            if next_hub_url:
+                self.configured_hub_url = next_hub_url
+                self.hub_url = next_hub_url
 
     async def run(self) -> None:
         timeout = httpx.Timeout(5.0, connect=2.0)
@@ -161,5 +188,5 @@ class HeartbeatWorker:
                     if error != self._last_error:
                         LOGGER.warning("Hub heartbeat failed: %s", error)
                     self._last_error = error
-                    self.hub_url = self.settings.hub_url
+                    self.hub_url = self.configured_hub_url
                 await asyncio.sleep(max(2.0, delay))

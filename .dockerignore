@@ -1,0 +1,12 @@
+.git
+.github
+.venv
+dist
+tests
+device
+docs
+packaging
+**/__pycache__
+**/*.pyc
+*.sqlite3
+*.db

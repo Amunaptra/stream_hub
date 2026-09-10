@@ -234,3 +234,166 @@ Yerel Hub uygulaması olarak tamamlandı; canlı cihaz verisiyle görsel doğrul
 2. SQLite yedekleme ve Hub log saklama politikasını eklemek.
 3. Tek makinede simüle Hub + çoklu sanal cihaz smoke testi yapmak.
 4. Donanım uygun olduğunda bir Odroid ile canlı kabul testi yapmak.
+
+## 2026-07-19 - Hub installer, yedekleme ve 15 cihaz smoke testi
+
+### Durum
+
+Otomatik testlerle tamamlandı; Linux systemd üzerinde canlı kurulum bekliyor.
+
+### Eklenenler
+
+- Debian/Ubuntu Hub makinesi için tekrar çalıştırılabilir `hub/installer/install.sh` eklendi.
+- Hub uygulaması `/opt/stream-hub`, SQLite verisi `/var/lib/stream-hub` ve ayarlar `/etc/stream-hub` olarak ayrıldı.
+- Hub servisi özel `stream-hub` sistem kullanıcısı ve grubu altında çalışacak şekilde hazırlandı.
+- İlk kurulumda 256-bit rastgele admin token üretimi eklendi.
+- Tekrar kurulumda admin token, Hub ayarları ve SQLite veritabanının korunması sağlandı.
+- Hub için systemd hardening, otomatik restart ve erişim sınırları eklendi.
+- Hub journal kayıtları da 7 gün, toplam 1 GB ve en az 2 GB boş alan politikasıyla sınırlandı.
+- SQLite online backup API'sini kullanan günlük yedekleme betiği eklendi.
+- Günlük yedekleme için systemd oneshot servis ve persistent timer eklendi.
+- Yedekler en fazla 7 gün ve 7 dosya olacak şekilde sınırlandı.
+- Installer sonunda Hub servis, health endpoint ve UI erişim kontrolü eklendi.
+
+### Doğrulama
+
+- Toplam 34 otomatik test başarılı.
+- SQLite veritabanı açıkken tutarlı yedek oluşturulduğu ve yedekten kayıt okunabildiği doğrulandı.
+- Fazla yedeklerin 7 dosya sınırına indirildiği doğrulandı.
+- Installer'ın mevcut env/veri dizinini silmediği, parola sıfırlamadığı ve log sınırlarını içerdiği test edildi.
+- 15 farklı cihazın benzersiz token ve IP ile Hub'a heartbeat göndermesi simüle edildi.
+- Hub envanterinde 15 cihazın tamamının online olarak listelendiği doğrulandı.
+- Toplam kaynak ağacında Python compile, JavaScript syntax, whitespace ve LF kontrolleri başarılı.
+
+### Bekleyen canlı doğrulamalar
+
+- Hub installer'ın gerçek Debian/Ubuntu systemd makinesinde çalıştırılması.
+- Gerçek ağda mDNS multicast discovery.
+- Bir Odroid üzerinde MPV/HDMI/tty1 oynatma.
+- Gerçek reboot ve ağ kesintisi sonrası komut sonucu davranışı.
+- Hub installer ve yedekleme paketi `agent/hub-installer` dalına gönderildi ve draft PR `#5` açıldı; PR tabanı dashboard dalıdır.
+
+## 2026-07-19 - Yerel Hub arayüz önizlemesi
+
+### Durum
+
+Tamamlandı; canlı Odroid gerektirmeyen yerel demo Hub üzerinde doğrulandı.
+
+### Yapılanlar ve doğrulama
+
+- Hub backend yerel makinede mDNS kapalı olarak çalıştırıldı ve `/healthz` yanıtı doğrulandı.
+- Arayüz 15 gerçekçi sanal Odroid kaydıyla dolduruldu: 14 online, 1 offline ve 2 onay bekleyen cihaz senaryosu oluşturuldu.
+- Player servisi, yüksek disk, yüksek sıcaklık ve log kullanım sınırı sağlık uyarıları arayüzde görünür hale getirildi.
+- Yönetici token oturumu ile giriş yapılarak filo özetinin, filtrelerin ve cihaz listesinin yüklendiği doğrulandı.
+- Cihaz detay çekmecesinde IP, CPU/RAM, disk, sıcaklık, log kullanımı, uptime ve revision bilgilerinin gösterildiği doğrulandı.
+- Oynatma listesi düzenleme, `Kaydet ve gönder`, `Player restart` ve `Cihazı reboot et` kontrollerinin görünür olduğu doğrulandı.
+- Yerel yönetim paneli Codex uygulamasının tarayıcısında kullanıcıya açık bırakıldı.
+
+## 2026-07-19 - 50 bağlantılı oynatma listesi desteği
+
+### Durum
+
+Tamamlandı ve otomatik testlerle doğrulandı.
+
+### Yapılanlar
+
+- Cihaz agent oynatma listesi sınırı 40 bağlantıdan 50 bağlantıya yükseltildi.
+- Hub backend reported ve desired playlist doğrulama sınırı 50 bağlantıya yükseltildi.
+- Web arayüzündeki playlist editörü 50 yayın satırı eklenmesine izin verecek şekilde güncellendi.
+- Kullanıcı 50 bağlantı sınırına ulaştığında arayüzde açıklayıcı bildirim gösterilmesi eklendi.
+- Ana proje dokümantasyonuna cihaz başına 50 yayın bağlantısı desteği işlendi.
+
+### Doğrulama
+
+- Cihaz modeliyle tam 50 bağlantılı playlist'in kabul edildiği test edildi.
+- Hub modeliyle tam 50 bağlantılı playlist'in kabul edildiği test edildi.
+- Hem cihaz hem Hub modellerinin 51 bağlantılı playlist'i reddettiği test edildi.
+- Toplam 37 otomatik test başarıyla tamamlandı.
+
+## 2026-07-19 - Yayın bazlı sağlık takibi
+
+### Durum
+
+Tamamlandı; otomatik testler ve 50 yayınlı yerel Hub arayüzüyle doğrulandı.
+
+### Yapılanlar
+
+- Her Odroid'in yayın URL'lerini kendi ağ bağlantısı üzerinden HLS manifest seviyesinde kontrol etmesi merkezi sağlık akışına bağlandı.
+- Kontroller cihaz yükünü korumak için varsayılan 60 saniye aralık ve en fazla 6 eşzamanlı bağlantıyla sınırlandı.
+- Sağlık sonuçlarının agent belleğinde önbelleğe alınması ve heartbeat ile Hub'a gönderilmesi eklendi.
+- Yayın kimliği, URL, aktiflik, sağlık durumu, HTTP kodu, gecikme, hata ve son kontrol zamanı Hub SQLite veritabanında saklanmaya başlandı.
+- Yönetici API'sine cihaz bazlı `GET /api/v1/devices/{device_id}/stream-health` endpoint'i eklendi.
+- Web playlist editörüne her yayın için `Sağlıklı`, `Hatalı`, `Devre dışı` ve `Kontrol bekliyor` göstergeleri eklendi.
+- Her satırda HTTP kodu, gecikme, hata açıklaması ve son kontrol zamanı gösterildi.
+- Oynatma listesi başlığına sağlıklı ve hatalı yayın toplamları eklendi.
+- Kaynak sağlığı ile aktif MPV oynatıcı durumunun ayrı sinyaller olduğu dokümante edildi.
+
+### Doğrulama
+
+- Heartbeat'in önbellekteki yayın sağlık sonuçlarını gönderdiği test edildi.
+- Hub'ın sağlık sonuçlarını sakladığı ve yetkili API üzerinden döndürdüğü test edildi.
+- Sağlık endpoint'inin yetkisiz isteği reddettiği doğrulandı.
+- Toplam 38 otomatik test başarıyla tamamlandı.
+- JavaScript syntax, Python compile ve whitespace kontrolleri başarılı.
+- Yerel demo panelinde 50 yayın satırının 47 sağlıklı ve 3 hatalı olarak gösterildiği doğrulandı.
+
+## 2026-07-19 - Bağımsız tek-komut kurulum paketleri
+
+### Durum
+
+Tamamlandı; Odroid ve merkezi Hub için ayrı dağıtım arşivleri üretildi.
+
+### Yapılanlar
+
+- Odroid için `stream-hub-odroid-<version>.tar.gz` bağımsız dağıtım formatı eklendi.
+- Merkezi Hub için `stream-hub-server-<version>.tar.gz` bağımsız dağıtım formatı eklendi.
+- Her paketin köküne tek giriş noktası olarak `install.sh` eklendi.
+- Mevcut installer'lar repo kökü veya bağımsız paket köküyle çalışabilecek şekilde düzenlendi.
+- Odroid paketine agent, player, systemd/journald dosyaları, Python proje tanımı ve sabitlenmiş gereksinimler dahil edildi.
+- Hub paketine backend, web arayüzü, systemd/journald dosyaları ve backup aracı dahil edildi.
+- Odroid installer'ın eksik `curl` sistem bağımlılığı otomatik apt kurulumuna eklendi.
+- Her iki installer işletim sistemi paketlerini ve izole venv içindeki Python bağımlılıklarını otomatik kuracak şekilde doğrulandı.
+- Paket içeriği için `MANIFEST.sha256`, üretilen arşivler için `SHA256SUMS` oluşturulması eklendi.
+- Paket üretim ve tek satırlık kurulum komutları dokümante edildi.
+
+### Doğrulama
+
+- İki arşivin birbirinden bağımsız ve gerekli dosyalarla üretildiği test edildi.
+- Arşivlerde `__pycache__` ve derlenmiş Python artıklarının bulunmadığı doğrulandı.
+- Kök `install.sh` dosyalarının çalıştırılabilir Unix izniyle paketlendiği doğrulandı.
+- Installer'ların gerekli apt ve pip kurulum adımlarını içerdiği test edildi.
+- Arşiv SHA-256 değerlerinin `SHA256SUMS` ile eşleştiği doğrulandı.
+- Toplam 40 otomatik test başarıyla tamamlandı.
+
+## 2026-07-19 - Kullanıcı adı ve parola tabanlı Hub yönetimi
+
+### Durum
+
+Tamamlandı; yönetici token girişi kullanıcı adı ve parola tabanlı hesaba dönüştürüldü.
+
+### Yapılanlar
+
+- Web giriş ekranına kullanıcı adı ve parola alanları eklendi.
+- Yönetici hesabı SQLite içinde kalıcı hale getirildi.
+- Parolalar rastgele salt ve `scrypt` kullanılarak özetleniyor; düz metin parola veritabanına yazılmıyor.
+- Oturum imzalama anahtarı paroladan ayrıldı.
+- Panel üst menüsüne kullanıcı adı ve parola değişikliği sağlayan **Hesap** ekranı eklendi.
+- Giriş bilgisi değiştiğinde mevcut yönetici oturumlarının tamamının geçersiz olması sağlandı.
+- Yönetici otomasyonları için HTTP Basic kullanıcı adı/parola desteği eklendi.
+- Odroid cihazlarının benzersiz Bearer token doğrulaması değiştirilmeden korundu.
+- Debian/Ubuntu ve TrueNAS installer'ları ilk yönetici hesabını güvenli şekilde oluşturacak biçimde güncellendi.
+- Eski kurulumlarda SQLite verisi ve cihaz envanteri korunarak otomatik hesap tablosu oluşturulması sağlandı.
+
+### Doğrulama
+
+- Doğru ve yanlış kullanıcı adı/parola girişleri test edildi.
+- HttpOnly ve SameSite cookie davranışının korunduğu doğrulandı.
+- Yönetici kullanıcı adı/parola değişimi ve eski bilgilerin reddedilmesi test edildi.
+- Korunan yönetici API endpoint'lerinde cookie ve HTTP Basic doğrulaması test edildi.
+- Toplam 42 otomatik test başarıyla tamamlandı.
+- Python compile ve JavaScript syntax kontrolleri geçti.
+
+### Güvenlik
+
+- Repo, paket ve changelog içine gerçek parola veya credential değeri yazılmadı.
+- Canlı deployment ve bağlantı ayrıntıları yalnızca yerel changelog kaydında tutulur.

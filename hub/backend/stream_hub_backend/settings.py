@@ -8,7 +8,8 @@ from pathlib import Path
 @dataclass(frozen=True)
 class HubSettings:
     database_file: Path
-    admin_token: str
+    admin_username: str
+    admin_password: str
     port: int = 8788
     advertise_mdns: bool = True
     offline_after_seconds: int = 30
@@ -18,15 +19,19 @@ class HubSettings:
 
     @classmethod
     def from_env(cls) -> "HubSettings":
-        token = os.environ.get("STREAM_HUB_ADMIN_TOKEN", "").strip()
-        if len(token) < 24:
-            raise RuntimeError("STREAM_HUB_ADMIN_TOKEN must contain at least 24 characters")
+        username = os.environ.get("STREAM_HUB_ADMIN_USERNAME", "admin").strip()
+        password = os.environ.get("STREAM_HUB_ADMIN_PASSWORD", "")
+        if len(username) < 3:
+            raise RuntimeError("STREAM_HUB_ADMIN_USERNAME must contain at least 3 characters")
+        if len(password) < 8:
+            raise RuntimeError("STREAM_HUB_ADMIN_PASSWORD must contain at least 8 characters")
         default_ui = Path(__file__).resolve().parents[2] / "ui"
         return cls(
             database_file=Path(
                 os.environ.get("STREAM_HUB_DATABASE", "/var/lib/stream-hub/hub.sqlite3")
             ),
-            admin_token=token,
+            admin_username=username,
+            admin_password=password,
             port=int(os.environ.get("STREAM_HUB_PORT", "8788")),
             advertise_mdns=os.environ.get("STREAM_HUB_MDNS", "1") != "0",
             offline_after_seconds=int(os.environ.get("STREAM_HUB_OFFLINE_AFTER", "30")),

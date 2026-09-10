@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,18 +14,30 @@ class Settings:
     agent_port: int = 8787
     hub_url: str | None = None
     heartbeat_interval_seconds: float = 10.0
+    stream_health_interval_seconds: float = 300.0
     discovery_timeout_seconds: float = 3.0
 
     @classmethod
     def from_env(cls) -> "Settings":
+        data_dir = Path(os.environ.get("STREAM_HUB_DATA_DIR", "/etc/stream-hub"))
+        saved_hub_url = None
+        try:
+            saved_hub_url = json.loads(
+                (data_dir / "hub.json").read_text(encoding="utf-8")
+            ).get("hub_url")
+        except (OSError, ValueError, AttributeError):
+            pass
         return cls(
-            data_dir=Path(os.environ.get("STREAM_HUB_DATA_DIR", "/etc/stream-hub")),
+            data_dir=data_dir,
             runtime_dir=Path(os.environ.get("STREAM_HUB_RUNTIME_DIR", "/run/stream-hub")),
             player_service=os.environ.get("STREAM_HUB_PLAYER_SERVICE", "stream-player.service"),
             agent_port=int(os.environ.get("STREAM_HUB_AGENT_PORT", "8787")),
-            hub_url=os.environ.get("STREAM_HUB_URL") or None,
+            hub_url=saved_hub_url or os.environ.get("STREAM_HUB_URL") or None,
             heartbeat_interval_seconds=float(
                 os.environ.get("STREAM_HUB_HEARTBEAT_INTERVAL", "10")
+            ),
+            stream_health_interval_seconds=float(
+                os.environ.get("STREAM_HUB_STREAM_HEALTH_INTERVAL", "300")
             ),
             discovery_timeout_seconds=float(
                 os.environ.get("STREAM_HUB_DISCOVERY_TIMEOUT", "3")
@@ -46,3 +59,7 @@ class Settings:
     @property
     def command_results_file(self) -> Path:
         return self.data_dir / "command-results.json"
+
+    @property
+    def hub_config_file(self) -> Path:
+        return self.data_dir / "hub.json"
