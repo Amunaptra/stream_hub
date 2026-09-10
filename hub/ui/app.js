@@ -125,7 +125,7 @@ function renderDashboard() {
     <div class="shell">
       <header class="topbar"><div class="topbar-inner">
         <div class="brand"><span class="brand-mark"></span><span>Stream Hub</span></div>
-        <div class="top-actions"><button class="btn ghost" id="refresh">Yenile</button><button class="btn ghost" id="account">Hesap</button><button class="btn ghost" id="logout">Çıkış</button></div>
+        <div class="top-actions"><button class="btn ghost" id="hubMigration">Hub adresi</button><button class="btn ghost" id="refresh">Yenile</button><button class="btn ghost" id="account">Hesap</button><button class="btn ghost" id="logout">Çıkış</button></div>
       </div></header>
       <main class="content">
         <div class="eyebrow">Merkezi yayın kontrolü</div>
@@ -137,9 +137,58 @@ function renderDashboard() {
       </main>
     </div>`;
   document.querySelector("#refresh").onclick = () => loadDevices(true);
+  document.querySelector("#hubMigration").onclick = openHubMigration;
   document.querySelector("#account").onclick = openAccount;
   document.querySelector("#logout").onclick = async () => { await api("/api/v1/session", { method: "DELETE" }); renderLogin(); };
   renderSummary(); renderFilters(); renderDeviceList();
+}
+
+async function openHubMigration() {
+  const backdrop = el("div", "drawer-backdrop");
+  const card = el("section", "account-card hub-migration-card");
+  const head = el("div", "drawer-head");
+  const title = el("div");
+  title.append(el("div", "eyebrow", "Filo bağlantısı"), el("h2", "", "Hub adresini değiştir"));
+  const close = el("button", "btn ghost", "Kapat");
+  let pollTimer = null;
+  const dismiss = () => { clearInterval(pollTimer); backdrop.remove(); };
+  close.onclick = dismiss; head.append(title, close); card.append(head);
+  card.append(el("div", "notice", "Odroidlerin erişebildiği LAN adresini yazın. Her cihaz önce yeni Hub'ı test eder; başarılı olursa adresi kalıcı kaydeder. Player yeniden başlamaz."));
+  const field = el("div", "field"); field.append(el("label", "", "Yeni Hub adresi"));
+  const input = document.createElement("input"); input.placeholder = "http://192.168.100.200:8788"; input.autocomplete = "off"; input.spellcheck = false; field.append(input); card.append(field);
+  const send = el("button", "btn primary", "Test et ve tüm cihazlara gönder"); send.style.marginTop = "18px"; send.style.width = "100%";
+  const error = el("div", "error"); error.hidden = true;
+  const results = el("div", "migration-results");
+  card.append(send, error, results);
+  send.onclick = async () => {
+    const hubUrl = input.value.trim().replace(/\/$/, "");
+    if (!confirm(`${hubUrl} adresi tüm onaylı Odroidlere gönderilsin mi?`)) return;
+    send.disabled = true; error.hidden = true; results.innerHTML = "";
+    try {
+      const queued = await api("/api/v1/fleet/hub-url", { method: "POST", body: JSON.stringify({ hub_url: hubUrl }) });
+      const tracked = new Map(queued.map(item => [item.device_id, item.command_id]));
+      const renderStatus = async () => {
+        const rows = await Promise.all([...tracked].map(async ([deviceId, commandId]) => {
+          const commands = await api(`/api/v1/devices/${encodeURIComponent(deviceId)}/commands`);
+          return commands.find(item => item.command_id === commandId);
+        }));
+        results.innerHTML = "";
+        rows.forEach(item => {
+          const device = state.devices.find(entry => entry.device_id === item.device_id);
+          const row = el("div", "migration-result");
+          const kind = item.status === "completed" ? "ok" : item.status === "failed" ? "bad" : "info";
+          row.append(el("span", "", device ? deviceName(device) : item.device_id), badge(item.status, kind));
+          if (item.result_message) row.append(el("small", "", item.result_message));
+          results.append(row);
+        });
+        if (rows.every(item => ["completed", "failed"].includes(item.status))) clearInterval(pollTimer);
+      };
+      await renderStatus(); pollTimer = setInterval(() => renderStatus().catch(() => {}), 3000);
+      toast(`${queued.length} cihaza Hub adresi komutu gönderildi`);
+    } catch (e) { error.textContent = e.message; error.hidden = false; send.disabled = false; }
+  };
+  backdrop.onclick = event => { if (event.target === backdrop) dismiss(); };
+  backdrop.append(card); document.body.append(backdrop); input.focus();
 }
 
 async function openAccount() {

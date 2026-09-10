@@ -103,6 +103,10 @@ input:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(62,230,1
 .command-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .notice { padding: 12px; border: 1px solid rgba(243,185,79,.3); background: rgba(243,185,79,.08); border-radius: 12px; color: #ffd78a; font-size: 13px; }
 .toast { position: fixed; left: 50%; bottom: 24px; z-index: 40; transform: translateX(-50%); padding: 11px 16px; border-radius: 12px; background: var(--text); color: var(--bg); font-weight: 750; box-shadow: 0 14px 40px rgba(0,0,0,.4); }
+.hub-migration-card { max-height: calc(100vh - 32px); overflow-y: auto; }
+.migration-results { display: grid; gap: 7px; margin-top: 16px; }
+.migration-result { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 5px 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+.migration-result small { grid-column: 1 / -1; color: var(--muted); overflow-wrap: anywhere; }
 
 @media (max-width: 900px) {
   .summary { grid-template-columns: repeat(2,1fr); }

@@ -407,6 +407,46 @@ def test_approved_device_receives_reboot_command_and_reports_result(tmp_path) ->
     assert commands.json()[0]["status"] == "completed"
 
 
+def test_admin_queues_hub_url_change_for_all_approved_devices(tmp_path) -> None:
+    client, _ = make_client(tmp_path)
+    admin = ADMIN
+    device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
+    new_hub = "http://192.168.100.200:8788"
+    with client:
+        client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
+        client.post("/api/v1/devices/odroid-test-001/approve", headers=admin)
+        queued = client.post(
+            "/api/v1/fleet/hub-url", headers=admin, json={"hub_url": new_hub}
+        )
+        heartbeat = client.post(
+            "/api/v1/devices/heartbeat", headers=device, json=payload()
+        )
+
+    assert queued.status_code == 200
+    assert len(queued.json()) == 1
+    assert queued.json()[0]["command"] == "hub_url_change"
+    assert queued.json()[0]["hub_url"] == new_hub
+    assert heartbeat.json()["commands"][0]["hub_url"] == new_hub
+
+
+def test_hub_url_change_rejects_credentials_and_paths(tmp_path) -> None:
+    client, _ = make_client(tmp_path)
+    with client:
+        credentials = client.post(
+            "/api/v1/fleet/hub-url",
+            headers=ADMIN,
+            json={"hub_url": "http://admin:secret@192.168.1.2:8788"},
+        )
+        path = client.post(
+            "/api/v1/fleet/hub-url",
+            headers=ADMIN,
+            json={"hub_url": "http://192.168.1.2:8788/ui"},
+        )
+
+    assert credentials.status_code == 422
+    assert path.status_code == 422
+
+
 def test_inventory_handles_fifteen_discovered_devices(tmp_path) -> None:
     client, _ = make_client(tmp_path)
     admin = ADMIN

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -98,12 +99,53 @@ class HubStreamHealth(BaseModel):
 
 class HubCommand(BaseModel):
     command_id: str
-    command: Literal["player_restart", "reboot"]
+    command: Literal["player_restart", "reboot", "hub_url_change"]
+    hub_url: str | None = None
     created_at: datetime
 
 
 class HubCommandRequest(BaseModel):
-    command: Literal["player_restart", "reboot"]
+    command: Literal["player_restart", "reboot", "hub_url_change"]
+    hub_url: str | None = None
+
+    @model_validator(mode="after")
+    def validate_command_payload(self) -> "HubCommandRequest":
+        if self.command == "hub_url_change":
+            self.hub_url = validate_hub_url(self.hub_url)
+        elif self.hub_url is not None:
+            raise ValueError("hub_url is only valid for hub_url_change")
+        return self
+
+
+def validate_hub_url(value: str | None) -> str:
+    if not value:
+        raise ValueError("hub_url is required")
+    cleaned = value.strip().rstrip("/")
+    parts = urlsplit(cleaned)
+    if (
+        parts.scheme not in {"http", "https"}
+        or not parts.hostname
+        or parts.username
+        or parts.password
+        or parts.path
+        or parts.query
+        or parts.fragment
+    ):
+        raise ValueError("hub_url must be an HTTP(S) origin without credentials or path")
+    try:
+        _ = parts.port
+    except ValueError as exc:
+        raise ValueError("hub_url contains an invalid port") from exc
+    return cleaned
+
+
+class HubUrlMigrationRequest(BaseModel):
+    hub_url: str
+
+    @field_validator("hub_url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        return validate_hub_url(value)
 
 
 class HubCommandResult(BaseModel):

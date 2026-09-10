@@ -171,3 +171,53 @@ def test_heartbeat_applies_config_executes_commands_and_reports_results(tmp_path
     assert any(path.endswith("/config-result") for path in reported_paths)
     assert any("cmd-restart/result" in path for path in reported_paths)
     assert any("cmd-reboot/result" in path for path in reported_paths)
+
+
+def test_heartbeat_tests_persists_and_switches_hub_url_without_player_restart(tmp_path) -> None:
+    old_hub = "http://192.168.100.142:8788"
+    new_hub = "http://192.168.100.200:8788"
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        runtime_dir=tmp_path / "run",
+        hub_url=old_hub,
+    )
+    store = DeviceStore(settings)
+    identity = store.load_or_create_identity()
+    controller = HeartbeatController()
+    worker = HeartbeatWorker(settings, identity, store, controller)
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        if request.url.path.endswith("/heartbeat"):
+            return httpx.Response(
+                200,
+                json={
+                    "ok": True,
+                    "approved": True,
+                    "heartbeat_interval_seconds": 10,
+                    "commands": [{
+                        "command_id": "cmd-hub-move",
+                        "command": "hub_url_change",
+                        "hub_url": new_hub,
+                        "created_at": "2026-09-10T12:00:00Z",
+                    }],
+                },
+            )
+        if str(request.url) == f"{new_hub}/healthz":
+            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(204)
+
+    async def execute() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await worker.send_once(client)
+
+    asyncio.run(execute())
+
+    assert worker.hub_url == new_hub
+    assert worker.configured_hub_url == new_hub
+    assert controller.restart_calls == 0
+    assert controller.reboot_calls == 0
+    assert json.loads(settings.hub_config_file.read_text())["hub_url"] == new_hub
+    assert f"{new_hub}/healthz" in requests
+    assert any(url.startswith(old_hub) and url.endswith("cmd-hub-move/result") for url in requests)

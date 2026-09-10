@@ -37,6 +37,7 @@ from .models import (
     HubPlaylistConfig,
     HubPlaylistDraft,
     HubStreamHealth,
+    HubUrlMigrationRequest,
 )
 from .settings import HubSettings
 
@@ -313,7 +314,7 @@ def create_app(settings: HubSettings) -> FastAPI:
         device_id: str, request: HubCommandRequest
     ) -> HubCommandRecord:
         try:
-            return database.enqueue_command(device_id, request.command)
+            return database.enqueue_command(device_id, request.command, request.hub_url)
         except DeviceNotFoundError as exc:
             raise HTTPException(status_code=404, detail="device not found") from exc
         except PermissionError as exc:
@@ -331,6 +332,14 @@ def create_app(settings: HubSettings) -> FastAPI:
             raise HTTPException(status_code=404, detail="device not found") from exc
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    @app.post(
+        "/api/v1/fleet/hub-url",
+        response_model=list[HubCommandRecord],
+        dependencies=admin,
+    )
+    def migrate_hub_url(request: HubUrlMigrationRequest) -> list[HubCommandRecord]:
+        return database.enqueue_hub_url_change_all(request.hub_url)
 
     @app.post(
         "/api/v1/devices/{device_id}/commands/{command_id}/result",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -123,5 +124,27 @@ class HeartbeatResponse(BaseModel):
 
 class DeviceCommand(BaseModel):
     command_id: str
-    command: Literal["player_restart", "reboot"]
+    command: Literal["player_restart", "reboot", "hub_url_change"]
+    hub_url: str | None = None
     created_at: datetime
+
+    @model_validator(mode="after")
+    def validate_hub_url_change(self) -> "DeviceCommand":
+        if self.command == "hub_url_change":
+            if not self.hub_url:
+                raise ValueError("hub_url is required for hub_url_change")
+            parts = urlsplit(self.hub_url)
+            if (
+                parts.scheme not in {"http", "https"}
+                or not parts.hostname
+                or parts.username
+                or parts.password
+                or parts.path not in {"", "/"}
+                or parts.query
+                or parts.fragment
+            ):
+                raise ValueError("hub_url must be an HTTP(S) origin without credentials or path")
+            self.hub_url = self.hub_url.rstrip("/")
+        elif self.hub_url is not None:
+            raise ValueError("hub_url is only valid for hub_url_change")
+        return self

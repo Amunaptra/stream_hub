@@ -122,6 +122,12 @@ class HubDatabase:
                 )
                 """
             )
+            command_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(commands)").fetchall()
+            }
+            if "command_payload" not in command_columns:
+                connection.execute("ALTER TABLE commands ADD COLUMN command_payload TEXT")
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS stream_health (
@@ -476,7 +482,9 @@ class HubDatabase:
                 ),
             )
 
-    def enqueue_command(self, device_id: str, command: str) -> HubCommandRecord:
+    def enqueue_command(
+        self, device_id: str, command: str, hub_url: str | None = None
+    ) -> HubCommandRecord:
         now = datetime.now(timezone.utc)
         command_id = uuid.uuid4().hex
         with self.connect() as connection:
@@ -484,15 +492,22 @@ class HubDatabase:
             connection.execute(
                 """
                 INSERT INTO commands (
-                    command_id, device_id, command, status, created_at
-                ) VALUES (?, ?, ?, 'queued', ?)
+                    command_id, device_id, command, command_payload, status, created_at
+                ) VALUES (?, ?, ?, ?, 'queued', ?)
                 """,
-                (command_id, device_id, command, now.isoformat()),
+                (
+                    command_id,
+                    device_id,
+                    command,
+                    json.dumps({"hub_url": hub_url}) if hub_url else None,
+                    now.isoformat(),
+                ),
             )
         return HubCommandRecord(
             command_id=command_id,
             device_id=device_id,
             command=command,
+            hub_url=hub_url,
             status="queued",
             created_at=now,
         )
@@ -502,7 +517,7 @@ class HubDatabase:
         with self.connect() as connection:
             rows = connection.execute(
                 """
-                SELECT command_id, command, created_at
+                SELECT command_id, command, command_payload, created_at
                 FROM commands
                 WHERE device_id = ? AND status IN ('queued', 'delivered')
                 ORDER BY created_at
@@ -519,6 +534,7 @@ class HubDatabase:
             HubCommand(
                 command_id=row["command_id"],
                 command=row["command"],
+                hub_url=(json.loads(row["command_payload"]).get("hub_url") if row["command_payload"] else None),
                 created_at=datetime.fromisoformat(row["created_at"]),
             )
             for row in rows
@@ -557,6 +573,7 @@ class HubDatabase:
                 command_id=row["command_id"],
                 device_id=row["device_id"],
                 command=row["command"],
+                hub_url=(json.loads(row["command_payload"]).get("hub_url") if row["command_payload"] else None),
                 status=row["status"],
                 created_at=datetime.fromisoformat(row["created_at"]),
                 delivered_at=datetime.fromisoformat(row["delivered_at"])
@@ -568,6 +585,19 @@ class HubDatabase:
                 result_message=row["result_message"],
             )
             for row in rows
+        ]
+
+    def enqueue_hub_url_change_all(self, hub_url: str) -> list[HubCommandRecord]:
+        with self.connect() as connection:
+            device_ids = [
+                row["device_id"]
+                for row in connection.execute(
+                    "SELECT device_id FROM devices WHERE approved = 1 ORDER BY device_id"
+                ).fetchall()
+            ]
+        return [
+            self.enqueue_command(device_id, "hub_url_change", hub_url)
+            for device_id in device_ids
         ]
 
     def approve(self, device_id: str) -> None:
