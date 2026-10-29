@@ -120,3 +120,10 @@ class DeviceStore:
         if len(data) > 100:
             data = dict(list(data.items())[-100:])
         _atomic_json_write(path, data)
+
+    def save_hub_url(self, hub_url: str) -> None:
+        _atomic_json_write(
+            self.settings.hub_config_file,
+            {"hub_url": hub_url.rstrip("/"), "updated_at": datetime.now(timezone.utc).isoformat()},
+            mode=0o640,
+        )

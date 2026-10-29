@@ -1,9 +1,54 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from ipaddress import IPv4Address, ip_address
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+STREAM_URL_SCHEMES = {
+    "http",
+    "https",
+    "rtmp",
+    "rtmps",
+    "rtsp",
+    "rtsps",
+    "udp",
+    "rtp",
+}
+MULTICAST_STREAM_SCHEMES = {"udp", "rtp"}
+
+
+def validate_stream_url(value: str) -> str:
+    cleaned = value.strip()
+    parts = urlsplit(cleaned)
+    scheme = parts.scheme.lower()
+    if scheme not in STREAM_URL_SCHEMES:
+        raise ValueError(
+            "stream URL must use http, https, rtmp, rtmps, rtsp, rtsps, udp or rtp"
+        )
+    if scheme not in MULTICAST_STREAM_SCHEMES:
+        return cleaned
+
+    if parts.password is not None or parts.username not in {None, ""}:
+        raise ValueError("UDP/RTP multicast URL must not contain credentials")
+    try:
+        destination = ip_address(parts.hostname or "")
+        port = parts.port
+    except ValueError as exc:
+        raise ValueError("UDP/RTP multicast URL must contain a valid address and port") from exc
+    if not isinstance(destination, IPv4Address) or not destination.is_multicast:
+        raise ValueError("UDP/RTP destination must be an IPv4 multicast address")
+    if port is None:
+        raise ValueError("UDP/RTP multicast URL must contain a port")
+    if parts.path not in {"", "/"} or parts.query or parts.fragment:
+        raise ValueError("UDP/RTP multicast URL must not contain a path, query or fragment")
+
+    # VLC-style udp://@239.x.x.x:port input is accepted, but MPV/FFmpeg receive
+    # a single canonical URL that works for both MPEG-TS/UDP and RTP multicast.
+    return f"{scheme}://{destination}:{port}"
 
 
 class StreamItem(BaseModel):
@@ -15,16 +60,13 @@ class StreamItem(BaseModel):
     @field_validator("url")
     @classmethod
     def validate_url(cls, value: str) -> str:
-        value = value.strip()
-        if not value.lower().startswith(("http://", "https://")):
-            raise ValueError("stream URL must use http or https")
-        return value
+        return validate_stream_url(value)
 
 
 class PlaylistConfig(BaseModel):
     revision: int = Field(default=0, ge=0)
     default_seconds: int = Field(default=20, ge=0, le=86_400)
-    streams: list[StreamItem] = Field(default_factory=list, max_length=40)
+    streams: list[StreamItem] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def unique_stream_ids(self) -> "PlaylistConfig":
@@ -96,6 +138,7 @@ class HealthItem(BaseModel):
     status_code: int | None = None
     latency_ms: int
     error: str | None = None
+    checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class HeartbeatPayload(BaseModel):
@@ -105,6 +148,7 @@ class HeartbeatPayload(BaseModel):
     agent_port: int
     status: DeviceStatus
     reported_config: PlaylistConfig
+    stream_health: list[HealthItem] = Field(default_factory=list, max_length=50)
 
 
 class HeartbeatResponse(BaseModel):
@@ -117,5 +161,27 @@ class HeartbeatResponse(BaseModel):
 
 class DeviceCommand(BaseModel):
     command_id: str
-    command: Literal["player_restart", "reboot"]
+    command: Literal["player_restart", "reboot", "hub_url_change"]
+    hub_url: str | None = None
     created_at: datetime
+
+    @model_validator(mode="after")
+    def validate_hub_url_change(self) -> "DeviceCommand":
+        if self.command == "hub_url_change":
+            if not self.hub_url:
+                raise ValueError("hub_url is required for hub_url_change")
+            parts = urlsplit(self.hub_url)
+            if (
+                parts.scheme not in {"http", "https"}
+                or not parts.hostname
+                or parts.username
+                or parts.password
+                or parts.path not in {"", "/"}
+                or parts.query
+                or parts.fragment
+            ):
+                raise ValueError("hub_url must be an HTTP(S) origin without credentials or path")
+            self.hub_url = self.hub_url.rstrip("/")
+        elif self.hub_url is not None:
+            raise ValueError("hub_url is only valid for hub_url_change")
+        return self

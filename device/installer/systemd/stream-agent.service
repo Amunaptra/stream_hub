@@ -2,6 +2,7 @@
 Description=Stream Hub device agent
 After=network-online.target stream-player.service
 Wants=network-online.target
+ConditionPathExists=!/etc/stream-hub/golden-image
 
 [Service]
 Type=simple
@@ -18,10 +19,10 @@ PrivateTmp=yes
 ProtectHome=yes
 ProtectSystem=strict
 ReadWritePaths=/etc/stream-hub /run/stream-hub
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-LockPersonality=yes
+# The agent uses tightly scoped sudoers entries for player restart and reboot.
+# These systemd sandbox options implicitly force NoNewPrivileges=yes and would
+# prevent sudo from using its setuid bit.
+NoNewPrivileges=no
 
 [Install]
 WantedBy=multi-user.target

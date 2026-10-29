@@ -1,0 +1,15 @@
+[Unit]
+Description=Prepare a Stream Hub golden-image clone
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target ssh.service stream-agent.service stream-player.service
+Wants=network-pre.target
+ConditionPathExists=/etc/stream-hub/golden-image
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/stream-hub-clone-firstboot
+TimeoutStartSec=5min
+
+[Install]
+WantedBy=multi-user.target
