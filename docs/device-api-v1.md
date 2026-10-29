@@ -17,7 +17,7 @@ Token ilk kurulumda `/etc/stream-hub/device.json` içinde oluşturulur. Hub pair
 | `GET` | `/api/v1/status` | Player ve sistem sağlık telemetrisini döndürür |
 | `GET` | `/api/v1/config` | Cihazın uyguladığı playlist revision'ını döndürür |
 | `PUT` | `/api/v1/config` | Yeni playlist'i doğrular, kaydeder ve player'ı yeniden başlatır |
-| `GET` | `/api/v1/streams/health` | Aktif playlist yayınlarını HLS manifest seviyesinde kontrol eder |
+| `GET` | `/api/v1/streams/health` | Aktif playlist yayınlarını HLS manifest veya RTMP/RTSP/UDP/RTP codec-paket seviyesinde kontrol eder |
 | `POST` | `/api/v1/player/restart` | Player servisini yeniden başlatır |
 | `POST` | `/api/v1/system/reboot` | Açık onayla cihaz reboot işlemini başlatır |
 | `GET` | `/api/v1/logs` | Player journal kayıtlarının sınırlı son bölümünü döndürür |

@@ -16,6 +16,8 @@ from .models import (
     HubPlaylistConfig,
     HubPlaylistDraft,
     HubStreamHealth,
+    StreamLibraryDraft,
+    StreamLibraryItem,
 )
 
 
@@ -24,6 +26,10 @@ class DeviceAuthenticationError(ValueError):
 
 
 class DeviceNotFoundError(KeyError):
+    pass
+
+
+class StreamLibraryConflictError(ValueError):
     pass
 
 
@@ -156,6 +162,17 @@ class HubDatabase:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS stream_library (
+                    id TEXT PRIMARY KEY,
+                    url TEXT NOT NULL UNIQUE,
+                    seconds INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
             existing = connection.execute(
                 "SELECT 1 FROM admin_credentials WHERE singleton = 1"
             ).fetchone()
@@ -225,6 +242,67 @@ class HubDatabase:
                     datetime.now(timezone.utc).isoformat(),
                 ),
             )
+
+    def list_library_streams(self) -> list[StreamLibraryItem]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, url, seconds, created_at, updated_at
+                FROM stream_library ORDER BY id COLLATE NOCASE
+                """
+            ).fetchall()
+        return [StreamLibraryItem.model_validate(dict(row)) for row in rows]
+
+    def upsert_library_stream(self, draft: StreamLibraryDraft) -> StreamLibraryItem:
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connect() as connection:
+            conflicting = connection.execute(
+                "SELECT id FROM stream_library WHERE url = ? AND id <> ?",
+                (draft.url, draft.id),
+            ).fetchone()
+            if conflicting:
+                raise StreamLibraryConflictError(
+                    f"URL is already registered as {conflicting['id']}"
+                )
+            connection.execute(
+                """
+                INSERT INTO stream_library (id, url, seconds, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    url=excluded.url,
+                    seconds=excluded.seconds,
+                    updated_at=excluded.updated_at
+                """,
+                (draft.id, draft.url, draft.seconds, now, now),
+            )
+            row = connection.execute(
+                """
+                SELECT id, url, seconds, created_at, updated_at
+                FROM stream_library WHERE id = ?
+                """,
+                (draft.id,),
+            ).fetchone()
+        if not row:
+            raise RuntimeError("stream library upsert failed")
+        return StreamLibraryItem.model_validate(dict(row))
+
+    def delete_library_stream(self, stream_id: str) -> bool:
+        with self.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM stream_library WHERE id = ?", (stream_id,)
+            )
+        return cursor.rowcount > 0
+
+    def delete_library_streams(self, stream_ids: list[str]) -> tuple[list[str], list[str]]:
+        deleted: list[str] = []
+        missing: list[str] = []
+        with self.connect() as connection:
+            for stream_id in stream_ids:
+                cursor = connection.execute(
+                    "DELETE FROM stream_library WHERE id = ?", (stream_id,)
+                )
+                (deleted if cursor.rowcount else missing).append(stream_id)
+        return deleted, missing
 
     def upsert_heartbeat(self, payload: HubHeartbeatPayload, token: str) -> bool:
         now = datetime.now(timezone.utc).isoformat()

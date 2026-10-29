@@ -95,10 +95,47 @@ def test_rtsp_source_precheck_uses_ffprobe_over_tcp(
     assert calls[0][-1] == url
 
 
-def test_stream_switch_uses_loadfile_on_existing_mpv(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "url",
+    [
+        "udp://239.10.10.1:5000",
+        "rtp://239.10.20.1:6000",
+    ],
+)
+def test_multicast_source_precheck_uses_bounded_ffprobe(
+    url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> object:
+        calls.append(command)
+        return types.SimpleNamespace(returncode=0, stdout="video\n")
+
+    monkeypatch.setattr(PLAYER.subprocess, "run", fake_run)
+
+    assert PLAYER.source_is_reachable(url)
+    assert calls[0][0] == "ffprobe"
+    assert calls[0][calls[0].index("-analyzeduration") + 1] == "1000000"
+    assert calls[0][calls[0].index("-probesize") + 1] == "1048576"
+    assert calls[0][-1] == url
+
+
+@pytest.mark.parametrize(
+    ("url", "expected_buffer"),
+    [
+        ("http://media/next.m3u8", 2.0),
+        ("udp://239.10.10.1:6000", 0.5),
+        ("rtp://239.10.20.1:6000", 0.5),
+    ],
+)
+def test_stream_switch_sets_protocol_buffer_and_uses_existing_mpv(
+    url: str,
+    expected_buffer: float,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     stream = PLAYER.StreamItem(
         id="next",
-        url="http://media/next.m3u8",
+        url=url,
         seconds=20,
         enabled=True,
     )
@@ -112,7 +149,11 @@ def test_stream_switch_uses_loadfile_on_existing_mpv(monkeypatch: pytest.MonkeyP
 
     elapsed = player.load(stream)
 
-    assert commands == [["loadfile", stream.url, "replace"]]
+    assert commands == [
+        ["set_property", "cache-secs", expected_buffer],
+        ["set_property", "demuxer-readahead-secs", expected_buffer],
+        ["loadfile", stream.url, "replace"],
+    ]
     assert elapsed >= 0
 
 

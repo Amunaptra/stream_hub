@@ -12,7 +12,15 @@ from .storage import DeviceStore
 
 
 LOGGER = logging.getLogger("stream-agent.health")
-FFPROBE_STREAM_SCHEMES = ("rtmp://", "rtmps://", "rtsp://", "rtsps://")
+FFPROBE_STREAM_SCHEMES = (
+    "rtmp://",
+    "rtmps://",
+    "rtsp://",
+    "rtsps://",
+    "udp://",
+    "rtp://",
+)
+MULTICAST_STREAM_SCHEMES = ("udp://", "rtp://")
 FFPROBE_TIMEOUT_SECONDS = 8.0
 STREAM_HEALTH_MAX_CONCURRENCY = 2
 
@@ -38,6 +46,13 @@ async def _check_ffprobe_stream(stream: StreamItem) -> HealthItem:
     input_options: list[str] = []
     if stream.url.lower().startswith(("rtsp://", "rtsps://")):
         input_options = ["-rtsp_transport", "tcp"]
+    elif stream.url.lower().startswith(MULTICAST_STREAM_SCHEMES):
+        input_options = [
+            "-analyzeduration",
+            "1000000",
+            "-probesize",
+            "1048576",
+        ]
     try:
         process = await asyncio.create_subprocess_exec(
             "ffprobe",

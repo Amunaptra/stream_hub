@@ -1,10 +1,54 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from ipaddress import IPv4Address, ip_address
 from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+STREAM_URL_SCHEMES = {
+    "http",
+    "https",
+    "rtmp",
+    "rtmps",
+    "rtsp",
+    "rtsps",
+    "udp",
+    "rtp",
+}
+MULTICAST_STREAM_SCHEMES = {"udp", "rtp"}
+
+
+def validate_stream_url(value: str) -> str:
+    cleaned = value.strip()
+    parts = urlsplit(cleaned)
+    scheme = parts.scheme.lower()
+    if scheme not in STREAM_URL_SCHEMES:
+        raise ValueError(
+            "stream URL must use http, https, rtmp, rtmps, rtsp, rtsps, udp or rtp"
+        )
+    if scheme not in MULTICAST_STREAM_SCHEMES:
+        return cleaned
+
+    if parts.password is not None or parts.username not in {None, ""}:
+        raise ValueError("UDP/RTP multicast URL must not contain credentials")
+    try:
+        destination = ip_address(parts.hostname or "")
+        port = parts.port
+    except ValueError as exc:
+        raise ValueError("UDP/RTP multicast URL must contain a valid address and port") from exc
+    if not isinstance(destination, IPv4Address) or not destination.is_multicast:
+        raise ValueError("UDP/RTP destination must be an IPv4 multicast address")
+    if port is None:
+        raise ValueError("UDP/RTP multicast URL must contain a port")
+    if parts.path not in {"", "/"} or parts.query or parts.fragment:
+        raise ValueError("UDP/RTP multicast URL must not contain a path, query or fragment")
+
+    # VLC-style udp://@239.x.x.x:port input is accepted, but MPV/FFmpeg receive
+    # a single canonical URL that works for both MPEG-TS/UDP and RTP multicast.
+    return f"{scheme}://{destination}:{port}"
 
 
 class StreamItem(BaseModel):
@@ -16,14 +60,7 @@ class StreamItem(BaseModel):
     @field_validator("url")
     @classmethod
     def validate_url(cls, value: str) -> str:
-        value = value.strip()
-        if not value.lower().startswith(
-            ("http://", "https://", "rtmp://", "rtmps://", "rtsp://", "rtsps://")
-        ):
-            raise ValueError(
-                "stream URL must use http, https, rtmp, rtmps, rtsp or rtsps"
-            )
-        return value
+        return validate_stream_url(value)
 
 
 class PlaylistConfig(BaseModel):

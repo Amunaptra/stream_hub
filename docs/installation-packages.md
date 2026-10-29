@@ -20,13 +20,13 @@ Arşivler ve `SHA256SUMS` dosyası `dist/` altında oluşturulur. Her arşivin i
 Arşivi Odroid'e kopyaladıktan sonra:
 
 ```bash
-tar -xzf stream-hub-odroid-0.1.0.tar.gz && sudo ./stream-hub-odroid-0.1.0/install.sh
+tar -xzf stream-hub-odroid-0.1.7.tar.gz && sudo ./stream-hub-odroid-0.1.7/install.sh
 ```
 
 Player kullanıcısı `odroid` değilse:
 
 ```bash
-tar -xzf stream-hub-odroid-0.1.0.tar.gz && sudo PLAYER_USER=kullanici ./stream-hub-odroid-0.1.0/install.sh
+tar -xzf stream-hub-odroid-0.1.7.tar.gz && sudo PLAYER_USER=kullanici ./stream-hub-odroid-0.1.7/install.sh
 ```
 
 Installer `apt` üzerinden `ca-certificates`, `curl`, `ffmpeg`, `mpv`, Python, venv ve `sudo` paketlerini; paket içindeki sabitlenmiş Python gereksinimlerini ise izole venv içine otomatik kurar.
@@ -36,7 +36,7 @@ Installer `apt` üzerinden `ca-certificates`, `curl`, `ffmpeg`, `mpv`, Python, v
 Arşivi merkezi Debian/Ubuntu sunucuya kopyaladıktan sonra:
 
 ```bash
-tar -xzf stream-hub-server-0.1.0.tar.gz && sudo ./stream-hub-server-0.1.0/install.sh
+tar -xzf stream-hub-server-0.1.7.tar.gz && sudo ./stream-hub-server-0.1.7/install.sh
 ```
 
 Installer `apt` üzerinden `ca-certificates`, `curl`, `openssl`, Python ve venv paketlerini; Hub Python bağımlılıklarını ise izole venv içine otomatik kurar.

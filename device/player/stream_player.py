@@ -29,7 +29,15 @@ SOURCE_CHECK_TIMEOUT = max(
     0.5,
     float(os.environ.get("STREAM_HUB_SOURCE_CHECK_TIMEOUT", "2")),
 )
-FFPROBE_STREAM_SCHEMES = ("rtmp://", "rtmps://", "rtsp://", "rtsps://")
+FFPROBE_STREAM_SCHEMES = (
+    "rtmp://",
+    "rtmps://",
+    "rtsp://",
+    "rtsps://",
+    "udp://",
+    "rtp://",
+)
+MULTICAST_STREAM_SCHEMES = ("udp://", "rtp://")
 FFPROBE_SOURCE_CHECK_TIMEOUT = max(
     SOURCE_CHECK_TIMEOUT,
     float(
@@ -49,6 +57,18 @@ PLAYBACK_STALL_SECONDS = max(
 )
 PLAYBACK_PROGRESS_EPSILON = 0.02
 STOP_REQUESTED = threading.Event()
+DEFAULT_BUFFER_SECONDS = max(
+    0.25,
+    float(os.environ.get("STREAM_HUB_DEFAULT_BUFFER_SECONDS", "2")),
+)
+MULTICAST_BUFFER_SECONDS = max(
+    0.1,
+    float(os.environ.get("STREAM_HUB_MULTICAST_BUFFER_SECONDS", "0.5")),
+)
+
+
+def mpv_seconds(value: float) -> str:
+    return f"{value:g}"
 
 MPV_COMMAND = [
     "mpv",
@@ -62,8 +82,8 @@ MPV_COMMAND = [
     "--no-audio",
     "--stop-screensaver",
     "--cache=yes",
-    "--cache-secs=2",
-    "--demuxer-readahead-secs=2",
+    f"--cache-secs={mpv_seconds(DEFAULT_BUFFER_SECONDS)}",
+    f"--demuxer-readahead-secs={mpv_seconds(DEFAULT_BUFFER_SECONDS)}",
     "--network-timeout=5",
     "--hls-bitrate=max",
     "--demuxer-lavf-o=fflags=+genpts+igndts",
@@ -138,6 +158,13 @@ def source_is_reachable(url: str, timeout: float = SOURCE_CHECK_TIMEOUT) -> bool
         input_options: list[str] = []
         if lowered_url.startswith(("rtsp://", "rtsps://")):
             input_options = ["-rtsp_transport", "tcp"]
+        elif lowered_url.startswith(MULTICAST_STREAM_SCHEMES):
+            input_options = [
+                "-analyzeduration",
+                "1000000",
+                "-probesize",
+                "1048576",
+            ]
         try:
             result = subprocess.run(
                 [
@@ -254,6 +281,13 @@ class PersistentMpv:
 
     def load(self, stream: StreamItem) -> int:
         started = time.monotonic()
+        buffer_seconds = (
+            MULTICAST_BUFFER_SECONDS
+            if stream.url.lower().startswith(MULTICAST_STREAM_SCHEMES)
+            else DEFAULT_BUFFER_SECONDS
+        )
+        self.send(["set_property", "cache-secs", buffer_seconds])
+        self.send(["set_property", "demuxer-readahead-secs", buffer_seconds])
         self.send(["loadfile", stream.url, "replace"])
         STOP_REQUESTED.wait(0.3)
         return int((time.monotonic() - started) * 1000)

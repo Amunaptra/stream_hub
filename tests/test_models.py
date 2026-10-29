@@ -37,7 +37,7 @@ def test_playlist_rejects_duplicate_ids() -> None:
 def test_stream_rejects_unsupported_urls(url: str) -> None:
     with pytest.raises(
         ValidationError,
-        match="http, https, rtmp, rtmps, rtsp or rtsps",
+        match="http, https, rtmp, rtmps, rtsp, rtsps, udp or rtp",
     ):
         StreamItem(id="bad", url=url)
 
@@ -65,6 +65,41 @@ def test_device_and_hub_streams_accept_rtmp(url: str) -> None:
 def test_device_and_hub_streams_accept_rtsp(url: str) -> None:
     assert StreamItem(id="camera1", url=url).url == url
     assert HubStreamItem(id="camera1", url=url).url == url
+
+
+@pytest.mark.parametrize(
+    ("url", "canonical"),
+    [
+        ("udp://239.10.10.1:5000", "udp://239.10.10.1:5000"),
+        ("udp://@239.10.10.2:5002", "udp://239.10.10.2:5002"),
+        ("rtp://239.10.20.1:6000", "rtp://239.10.20.1:6000"),
+        ("rtp://@239.10.20.2:6002", "rtp://239.10.20.2:6002"),
+    ],
+)
+def test_device_and_hub_streams_accept_multicast(
+    url: str, canonical: str
+) -> None:
+    assert StreamItem(id="multicast", url=url).url == canonical
+    assert HubStreamItem(id="multicast", url=url).url == canonical
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "udp://192.168.102.6:5000",
+        "rtp://192.168.102.6:5000",
+        "udp://239.10.10.1",
+        "udp://239.10.10.1:5000/path",
+        "udp://239.10.10.1:5000?localaddr=192.168.102.221",
+        "udp://viewer@239.10.10.1:5000",
+        "udp://ff02::1:5000",
+    ],
+)
+def test_device_and_hub_streams_reject_noncanonical_multicast(url: str) -> None:
+    with pytest.raises(ValidationError):
+        StreamItem(id="bad", url=url)
+    with pytest.raises(ValidationError):
+        HubStreamItem(id="bad", url=url)
 
 
 def test_device_playlist_accepts_fifty_streams() -> None:

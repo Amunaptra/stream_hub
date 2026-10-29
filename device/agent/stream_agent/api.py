@@ -104,6 +104,7 @@ def create_app(
                 "player-restart",
                 "reboot",
                 "stream-health",
+                "udp-rtp-multicast",
                 "system-health",
             ],
         )

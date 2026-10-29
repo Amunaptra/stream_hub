@@ -19,13 +19,20 @@ capture to a public repository or release. A separately sanitized public image
 must remove every deployment-specific credential and pass a dedicated security
 audit before distribution.
 
-The v0.1.4 public release image is a separate sanitized derivative. It is not
+The v0.1.7 public release image is a separate sanitized derivative. It is not
 the private field image. Its device token, command cache, authorized keys, SSH
 host keys, machine ID, logs, histories, leases, and deleted free-space data
 were cleared before release. Legacy player code and operational stream
 configuration inherited by the older base image were also removed.
 
-The v0.1.4 image supports HLS over HTTP/HTTPS, RTMP/RTMPS, and RTSP/RTSPS.
+The reproducible offline updater is
+`packaging/odroid/build_public_image.sh`. It copies a sanitized source image,
+updates the packaged agent/player and service files, resets clone identity and
+default accounts, clears free space, runs filesystem and Zstandard checks, and
+performs a final credential/identity audit before publishing the result.
+
+The v0.1.7 image supports HLS over HTTP/HTTPS, RTMP/RTMPS, RTSP/RTSPS, and
+MPEG-TS over UDP/RTP multicast.
 RTMP source
 preflight and stream-health checks use the bundled `ffprobe` runtime before
 the persistent MPV process replaces the current stream.
@@ -40,7 +47,7 @@ Default public-image accounts:
 - `odroid` / `odroid`
 
 Change both passwords immediately after first boot. The public image is
-preconfigured for Hub URL `http://192.168.100.142:8788`; deployments using a
+preconfigured for Hub URL `http://192.168.100.197:8788`; deployments using a
 different address must replace
 `/etc/systemd/system/stream-agent.service.d/hub.conf`.
 

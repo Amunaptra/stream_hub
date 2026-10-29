@@ -12,12 +12,14 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
 from . import __version__
 from .database import (
     DeviceAuthenticationError,
     DeviceNotFoundError,
     HubDatabase,
+    StreamLibraryConflictError,
 )
 from .discovery import HubAdvertiser
 from .models import (
@@ -38,6 +40,13 @@ from .models import (
     HubPlaylistDraft,
     HubStreamHealth,
     HubUrlMigrationRequest,
+    StreamLibraryDraft,
+    StreamLibraryDeleteRequest,
+    StreamLibraryDeleteResult,
+    StreamLibraryImportError,
+    StreamLibraryImportRequest,
+    StreamLibraryImportResult,
+    StreamLibraryItem,
 )
 from .settings import HubSettings
 
@@ -118,7 +127,6 @@ def create_app(settings: HubSettings) -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="valid Hub administrator session required",
-                headers={"WWW-Authenticate": "Basic"},
             )
 
     admin = [Depends(require_admin_session)]
@@ -177,6 +185,60 @@ def create_app(settings: HubSettings) -> FastAPI:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         response.delete_cookie(SESSION_COOKIE)
         return AdminSessionResponse()
+
+    @app.get(
+        "/api/v1/stream-library",
+        response_model=list[StreamLibraryItem],
+        dependencies=admin,
+    )
+    def stream_library() -> list[StreamLibraryItem]:
+        return database.list_library_streams()
+
+    @app.post(
+        "/api/v1/stream-library/import",
+        response_model=StreamLibraryImportResult,
+        dependencies=admin,
+    )
+    def import_stream_library(
+        request: StreamLibraryImportRequest,
+    ) -> StreamLibraryImportResult:
+        imported: list[StreamLibraryItem] = []
+        errors: list[StreamLibraryImportError] = []
+        for index, raw in enumerate(request.items):
+            item_id = raw.get("id") if isinstance(raw.get("id"), str) else None
+            try:
+                draft = StreamLibraryDraft.model_validate(raw)
+                imported.append(database.upsert_library_stream(draft))
+            except ValidationError as exc:
+                message = "; ".join(error["msg"] for error in exc.errors())
+                errors.append(
+                    StreamLibraryImportError(index=index, id=item_id, message=message)
+                )
+            except StreamLibraryConflictError as exc:
+                errors.append(
+                    StreamLibraryImportError(index=index, id=item_id, message=str(exc))
+                )
+        return StreamLibraryImportResult(imported=imported, errors=errors)
+
+    @app.post(
+        "/api/v1/stream-library/bulk-delete",
+        response_model=StreamLibraryDeleteResult,
+        dependencies=admin,
+    )
+    def bulk_delete_stream_library(
+        request: StreamLibraryDeleteRequest,
+    ) -> StreamLibraryDeleteResult:
+        deleted, missing = database.delete_library_streams(request.ids)
+        return StreamLibraryDeleteResult(deleted=deleted, missing=missing)
+
+    @app.delete(
+        "/api/v1/stream-library/{stream_id}",
+        status_code=204,
+        dependencies=admin,
+    )
+    def delete_stream_library_item(stream_id: str) -> None:
+        if not database.delete_library_stream(stream_id):
+            raise HTTPException(status_code=404, detail="library stream not found")
 
     @app.post(
         "/api/v1/devices/heartbeat",

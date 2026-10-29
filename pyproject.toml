@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stream-hub-device"
-version = "0.1.0"
-description = "Device agent for centrally managed Odroid HLS players"
+version = "0.1.7"
+description = "Device agent for centrally managed Odroid HLS, RTMP, RTSP and multicast players"
 requires-python = ">=3.10"
 dependencies = [
   "fastapi>=0.115,<1",

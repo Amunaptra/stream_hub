@@ -1,11 +1,52 @@
 from __future__ import annotations
 
 from datetime import datetime
+from ipaddress import IPv4Address, ip_address
 
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+STREAM_URL_SCHEMES = {
+    "http",
+    "https",
+    "rtmp",
+    "rtmps",
+    "rtsp",
+    "rtsps",
+    "udp",
+    "rtp",
+}
+MULTICAST_STREAM_SCHEMES = {"udp", "rtp"}
+
+
+def validate_stream_url(value: str) -> str:
+    cleaned = value.strip()
+    parts = urlsplit(cleaned)
+    scheme = parts.scheme.lower()
+    if scheme not in STREAM_URL_SCHEMES:
+        raise ValueError(
+            "stream URL must use http, https, rtmp, rtmps, rtsp, rtsps, udp or rtp"
+        )
+    if scheme not in MULTICAST_STREAM_SCHEMES:
+        return cleaned
+
+    if parts.password is not None or parts.username not in {None, ""}:
+        raise ValueError("UDP/RTP multicast URL must not contain credentials")
+    try:
+        destination = ip_address(parts.hostname or "")
+        port = parts.port
+    except ValueError as exc:
+        raise ValueError("UDP/RTP multicast URL must contain a valid address and port") from exc
+    if not isinstance(destination, IPv4Address) or not destination.is_multicast:
+        raise ValueError("UDP/RTP destination must be an IPv4 multicast address")
+    if port is None:
+        raise ValueError("UDP/RTP multicast URL must contain a port")
+    if parts.path not in {"", "/"} or parts.query or parts.fragment:
+        raise ValueError("UDP/RTP multicast URL must not contain a path, query or fragment")
+    return f"{scheme}://{destination}:{port}"
 
 
 class HubPlayerState(BaseModel):
@@ -60,14 +101,7 @@ class HubStreamItem(BaseModel):
     @field_validator("url")
     @classmethod
     def validate_url(cls, value: str) -> str:
-        value = value.strip()
-        if not value.lower().startswith(
-            ("http://", "https://", "rtmp://", "rtmps://", "rtsp://", "rtsps://")
-        ):
-            raise ValueError(
-                "stream URL must use http, https, rtmp, rtmps, rtsp or rtsps"
-            )
-        return value
+        return validate_stream_url(value)
 
 
 class HubPlaylistDraft(BaseModel):
@@ -84,6 +118,56 @@ class HubPlaylistDraft(BaseModel):
 
 class HubPlaylistConfig(HubPlaylistDraft):
     revision: int = Field(ge=0)
+
+
+class StreamLibraryDraft(BaseModel):
+    id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.-]+$")
+    seconds: int = Field(default=20, ge=0, le=86_400)
+    url: str = Field(min_length=8, max_length=2_048)
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        return validate_stream_url(value)
+
+
+class StreamLibraryItem(StreamLibraryDraft):
+    created_at: datetime
+    updated_at: datetime
+
+
+class StreamLibraryImportRequest(BaseModel):
+    items: list[dict[str, Any]] = Field(min_length=1, max_length=500)
+
+
+class StreamLibraryImportError(BaseModel):
+    index: int = Field(ge=0)
+    id: str | None = None
+    message: str
+
+
+class StreamLibraryImportResult(BaseModel):
+    imported: list[StreamLibraryItem] = Field(default_factory=list)
+    errors: list[StreamLibraryImportError] = Field(default_factory=list)
+
+
+class StreamLibraryDeleteRequest(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=500)
+
+    @field_validator("ids")
+    @classmethod
+    def clean_ids(cls, values: list[str]) -> list[str]:
+        cleaned = [value.strip() for value in values if value.strip()]
+        if not cleaned:
+            raise ValueError("at least one stream ID is required")
+        if len(cleaned) != len(set(cleaned)):
+            raise ValueError("stream IDs must be unique")
+        return cleaned
+
+
+class StreamLibraryDeleteResult(BaseModel):
+    deleted: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
 
 
 class HubStreamHealth(BaseModel):

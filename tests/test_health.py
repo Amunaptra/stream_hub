@@ -76,6 +76,24 @@ def test_rtsp_health_error_does_not_expose_url_credentials(monkeypatch) -> None:
     assert "secret" not in result.error
 
 
+def test_udp_multicast_health_uses_bounded_ffprobe(monkeypatch) -> None:
+    commands: list[tuple[object, ...]] = []
+
+    async def fake_create_subprocess_exec(*command: object, **_kwargs: object) -> FakeProbe:
+        commands.append(command)
+        return FakeProbe()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    stream = StreamItem(id="salon1", url="udp://239.10.10.1:5000")
+
+    result = asyncio.run(health._check_ffprobe_stream(stream))
+
+    assert result.ok is True
+    assert commands[0][commands[0].index("-analyzeduration") + 1] == "1000000"
+    assert commands[0][commands[0].index("-probesize") + 1] == "1048576"
+    assert commands[0][-1] == stream.url
+
+
 def test_health_initial_delay_is_stable_and_bounded() -> None:
     first = health.deterministic_initial_delay("odroid-test-1", 300.0)
     second = health.deterministic_initial_delay("odroid-test-1", 300.0)

@@ -208,6 +208,7 @@ def test_browser_session_uses_http_only_cookie(tmp_path) -> None:
         denied_again = client.get("/api/v1/devices")
 
     assert denied.status_code == 401
+    assert "www-authenticate" not in denied.headers
     assert bad_login.status_code == 401
     assert login.status_code == 200
     assert "HttpOnly" in login.headers["set-cookie"]
@@ -470,3 +471,77 @@ def test_inventory_handles_fifteen_discovered_devices(tmp_path) -> None:
     assert inventory.status_code == 200
     assert len(inventory.json()) == 15
     assert all(device["online"] for device in inventory.json())
+
+
+def test_admin_imports_lists_updates_and_deletes_stream_library(tmp_path) -> None:
+    client, _ = make_client(tmp_path)
+    with client:
+        unauthorized = client.get("/api/v1/stream-library")
+        imported = client.post(
+            "/api/v1/stream-library/import",
+            headers=ADMIN,
+            json={
+                "items": [
+                    {
+                        "id": "anttron-01",
+                        "url": "udp://@239.192.1.1:5001",
+                        "seconds": 0,
+                    },
+                    {
+                        "id": "mist-01",
+                        "url": "udp://239.10.10.1:6000",
+                        "seconds": 20,
+                    },
+                    {"id": "broken id", "url": "file:///tmp/video.mp4"},
+                ]
+            },
+        )
+        updated = client.post(
+            "/api/v1/stream-library/import",
+            headers=ADMIN,
+            json={
+                "items": [
+                    {
+                        "id": "mist-01",
+                        "url": "udp://239.10.10.1:6000",
+                        "seconds": 45,
+                    },
+                    {
+                        "id": "duplicate-url",
+                        "url": "udp://239.10.10.1:6000",
+                        "seconds": 20,
+                    },
+                ]
+            },
+        )
+        library = client.get("/api/v1/stream-library", headers=ADMIN)
+        bulk_deleted = client.post(
+            "/api/v1/stream-library/bulk-delete",
+            headers=ADMIN,
+            json={"ids": ["anttron-01", "missing-stream"]},
+        )
+        remaining = client.get("/api/v1/stream-library", headers=ADMIN)
+        empty_bulk = client.post(
+            "/api/v1/stream-library/bulk-delete", headers=ADMIN, json={"ids": []}
+        )
+
+    assert unauthorized.status_code == 401
+    assert imported.status_code == 200
+    assert len(imported.json()["imported"]) == 2
+    assert imported.json()["imported"][0]["url"] == "udp://239.192.1.1:5001"
+    assert len(imported.json()["errors"]) == 1
+    assert imported.json()["errors"][0]["index"] == 2
+    assert updated.status_code == 200
+    assert updated.json()["imported"][0]["seconds"] == 45
+    assert len(updated.json()["errors"]) == 1
+    assert "already registered" in updated.json()["errors"][0]["message"]
+    assert library.status_code == 200
+    assert [item["id"] for item in library.json()] == ["anttron-01", "mist-01"]
+    assert next(item for item in library.json() if item["id"] == "mist-01")["seconds"] == 45
+    assert bulk_deleted.status_code == 200
+    assert bulk_deleted.json() == {
+        "deleted": ["anttron-01"],
+        "missing": ["missing-stream"],
+    }
+    assert [item["id"] for item in remaining.json()] == ["mist-01"]
+    assert empty_bulk.status_code == 422

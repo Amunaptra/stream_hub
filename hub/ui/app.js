@@ -7,6 +7,7 @@ const state = {
   selected: null,
   config: null,
   streamHealth: [],
+  library: [],
   timer: null,
 };
 
@@ -125,7 +126,7 @@ function renderDashboard() {
     <div class="shell">
       <header class="topbar"><div class="topbar-inner">
         <div class="brand"><span class="brand-mark"></span><span>Stream Hub</span></div>
-        <div class="top-actions"><button class="btn ghost" id="hubMigration">Hub adresi</button><button class="btn ghost" id="refresh">Yenile</button><button class="btn ghost" id="account">Hesap</button><button class="btn ghost" id="logout">Çıkış</button></div>
+        <div class="top-actions"><button class="btn ghost" id="streamLibrary">Yayın kütüphanesi</button><button class="btn ghost" id="hubMigration">Hub adresi</button><button class="btn ghost" id="refresh">Yenile</button><button class="btn ghost" id="account">Hesap</button><button class="btn ghost" id="logout">Çıkış</button></div>
       </div></header>
       <main class="content">
         <div class="eyebrow">Merkezi yayın kontrolü</div>
@@ -137,10 +138,181 @@ function renderDashboard() {
       </main>
     </div>`;
   document.querySelector("#refresh").onclick = () => loadDevices(true);
+  document.querySelector("#streamLibrary").onclick = openStreamLibrary;
   document.querySelector("#hubMigration").onclick = openHubMigration;
   document.querySelector("#account").onclick = openAccount;
   document.querySelector("#logout").onclick = async () => { await api("/api/v1/session", { method: "DELETE" }); renderLogin(); };
   renderSummary(); renderFilters(); renderDeviceList();
+}
+
+function parseLibraryText(filename, text) {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error("Dosya boş.");
+  if (filename.toLowerCase().endsWith(".json") || trimmed.startsWith("[") || trimmed.startsWith("{")) {
+    const parsed = JSON.parse(trimmed);
+    const rows = Array.isArray(parsed) ? parsed : parsed.streams;
+    if (!Array.isArray(rows)) throw new Error("JSON bir dizi veya streams dizisi içermeli.");
+    return rows.map(item => ({ id: item.id ?? item.name ?? "", url: item.url ?? "", seconds: Number(item.seconds ?? 20) }));
+  }
+  let generated = 0;
+  return trimmed.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith("#")).map(line => {
+    const parts = line.includes("|") ? line.split("|").map(value => value.trim()) : [line];
+    if (parts.length === 1) {
+      generated += 1;
+      return { id: `stream-${String(generated).padStart(3, "0")}`, url: parts[0], seconds: 20 };
+    }
+    return { id: parts[0], url: parts[1] || "", seconds: Number(parts[2] || 20) };
+  });
+}
+
+async function openStreamLibrary() {
+  const backdrop = el("div", "library-backdrop");
+  const card = el("section", "library-card");
+  const head = el("div", "drawer-head");
+  const title = el("div"); title.append(el("div", "eyebrow", "Ortak kaynak havuzu"), el("h2", "", "Yayın kütüphanesi"));
+  const close = el("button", "btn ghost", "Kapat"); close.onclick = () => backdrop.remove(); head.append(title, close); card.append(head);
+  card.append(el("div", "notice", "Dosyadaki yayınlar yalnız Hub kütüphanesine kaydedilir; hiçbir Odroid playlist'i otomatik değişmez. TXT: id|url|süre veya satır başına yalnız URL. JSON: [{id, url, seconds}]."));
+  const importArea = el("div", "library-import");
+  const file = document.createElement("input"); file.type = "file"; file.accept = ".txt,.json,text/plain,application/json";
+  const importButton = el("button", "btn primary", "Dosyayı içe aktar"); importButton.disabled = true;
+  const preview = el("div", "library-preview", "Bir TXT veya JSON dosyası seçin.");
+  let pending = [];
+  file.onchange = async () => {
+    importButton.disabled = true;
+    try {
+      const selectedFile = file.files[0];
+      if (!selectedFile) throw new Error("Dosya seçilmedi.");
+      pending = parseLibraryText(selectedFile.name, await selectedFile.text());
+      if (!pending.length) throw new Error("Dosyada yayın bulunamadı.");
+      preview.textContent = `${pending.length} yayın bulundu. İlk kayıt: ${pending[0].id} → ${pending[0].url}`;
+      importButton.disabled = false;
+    } catch (error) {
+      pending = [];
+      preview.textContent = `Dosya okunamadı: ${error.message}`;
+    }
+  };
+  importArea.append(file, importButton, preview); card.append(importArea);
+  const result = el("div", "library-result"); card.append(result);
+  const libraryToolbar = el("div", "library-toolbar");
+  const search = document.createElement("input"); search.type = "search"; search.placeholder = "Yayın ID veya URL ara"; search.autocomplete = "off";
+  const selectVisible = el("button", "btn", "Görünenleri seç");
+  const clearSelection = el("button", "btn ghost", "Seçimi temizle");
+  const deleteSelected = el("button", "btn danger", "Seçilileri sil (0)"); deleteSelected.disabled = true;
+  libraryToolbar.append(search, selectVisible, clearSelection, deleteSelected); card.append(libraryToolbar);
+  const list = el("div", "library-list"); card.append(list);
+  const selectedIds = new Set();
+
+  const filteredLibrary = () => {
+    const query = search.value.trim().toLocaleLowerCase("tr-TR");
+    if (!query) return state.library;
+    return state.library.filter(item => `${item.id} ${item.url}`.toLocaleLowerCase("tr-TR").includes(query));
+  };
+
+  const updateSelection = () => {
+    deleteSelected.textContent = `Seçilileri sil (${selectedIds.size})`;
+    deleteSelected.disabled = selectedIds.size === 0;
+    clearSelection.disabled = selectedIds.size === 0;
+  };
+
+  const renderRows = () => {
+    list.innerHTML = "";
+    const visible = filteredLibrary();
+    const heading = el("div", "section-title");
+    heading.append(el("h3", "", `Kayıtlı yayınlar (${visible.length}/${state.library.length})`));
+    list.append(heading);
+    selectVisible.disabled = visible.length === 0;
+    if (!visible.length) {
+      list.append(el("div", "empty compact", state.library.length ? "Aramayla eşleşen yayın yok." : "Kütüphane henüz boş."));
+      updateSelection();
+      return;
+    }
+    visible.forEach(item => {
+      const row = el("div", "library-row");
+      const selected = document.createElement("input"); selected.type = "checkbox"; selected.checked = selectedIds.has(item.id); selected.title = "Toplu işlem için seç";
+      selected.onchange = () => { selected.checked ? selectedIds.add(item.id) : selectedIds.delete(item.id); updateSelection(); };
+      const info = el("div", "library-info"); info.append(el("strong", "", item.id), el("span", "", item.url));
+      const duration = badge(item.seconds === 0 ? "Süresiz" : `${item.seconds} sn`, "info");
+      const remove = el("button", "btn ghost remove", "×"); remove.title = "Kütüphaneden kaldır";
+      remove.onclick = async () => {
+        if (!confirm(`${item.id} kütüphaneden kaldırılsın mı? Cihaz playlist'leri etkilenmez.`)) return;
+        await api(`/api/v1/stream-library/${encodeURIComponent(item.id)}`, { method: "DELETE" });
+        selectedIds.delete(item.id);
+        await renderList();
+      };
+      row.append(selected, info, duration, remove); list.append(row);
+    });
+    updateSelection();
+  };
+
+  const renderList = async () => {
+    state.library = await api("/api/v1/stream-library");
+    const validIds = new Set(state.library.map(item => item.id));
+    [...selectedIds].forEach(id => { if (!validIds.has(id)) selectedIds.delete(id); });
+    renderRows();
+  };
+  search.oninput = renderRows;
+  selectVisible.onclick = () => { filteredLibrary().forEach(item => selectedIds.add(item.id)); renderRows(); };
+  clearSelection.onclick = () => { selectedIds.clear(); renderRows(); };
+  deleteSelected.onclick = async () => {
+    const ids = [...selectedIds];
+    if (!ids.length || !confirm(`${ids.length} yayın kütüphaneden silinsin mi? Cihaz playlist'leri etkilenmez.`)) return;
+    deleteSelected.disabled = true;
+    try {
+      const response = await api("/api/v1/stream-library/bulk-delete", { method: "POST", body: JSON.stringify({ ids }) });
+      selectedIds.clear();
+      result.innerHTML = "";
+      result.append(badge(`${response.deleted.length} yayın silindi`, "ok"));
+      if (response.missing.length) result.append(document.createTextNode(" "), badge(`${response.missing.length} bulunamadı`, "warn"));
+      await renderList();
+    } catch (error) { result.innerHTML = ""; result.append(el("div", "error", error.message)); updateSelection(); }
+  };
+  importButton.onclick = async () => {
+    importButton.disabled = true; result.innerHTML = "";
+    try {
+      const response = await api("/api/v1/stream-library/import", { method: "POST", body: JSON.stringify({ items: pending }) });
+      result.append(badge(`${response.imported.length} aktarıldı`, "ok"));
+      if (response.errors.length) {
+        result.append(document.createTextNode(" "), badge(`${response.errors.length} hatalı`, "bad"));
+        response.errors.forEach(item => result.append(el("div", "error", `Satır ${item.index + 1}${item.id ? ` (${item.id})` : ""}: ${item.message}`)));
+      }
+      await renderList();
+    } catch (error) { result.append(el("div", "error", error.message)); }
+    finally { importButton.disabled = false; }
+  };
+  backdrop.onclick = event => { if (event.target === backdrop) backdrop.remove(); };
+  backdrop.append(card); document.body.append(backdrop);
+  try { await renderList(); } catch (error) { result.append(el("div", "error", `Kütüphane alınamadı: ${error.message}`)); }
+}
+
+async function openLibraryPicker(playlist) {
+  let items;
+  try { items = await api("/api/v1/stream-library"); }
+  catch (error) { toast(`Kütüphane alınamadı: ${error.message}`); return; }
+  const existingIds = new Set([...playlist.querySelectorAll(".stream-id")].map(input => input.value.trim()));
+  const existingUrls = new Set([...playlist.querySelectorAll(".stream-url")].map(input => input.value.trim()));
+  const backdrop = el("div", "library-backdrop picker");
+  const card = el("section", "library-card picker-card");
+  const head = el("div", "drawer-head");
+  const title = el("div"); title.append(el("div", "eyebrow", "Playlist planlama"), el("h2", "", "Kütüphaneden yayın ekle"));
+  const close = el("button", "btn ghost", "Kapat"); close.onclick = () => backdrop.remove(); head.append(title, close); card.append(head);
+  card.append(el("div", "notice", "Seçilen yayınlar bu cihazın formuna pasif eklenir. Oynatmak istediklerinizi etkinleştirip Kaydet ve gönder düğmesine basın."));
+  const choices = el("div", "library-choices");
+  items.forEach(item => {
+    const disabled = existingIds.has(item.id) || existingUrls.has(item.url);
+    const label = el("label", `library-choice${disabled ? " disabled" : ""}`);
+    const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.disabled = disabled; checkbox.dataset.id = item.id;
+    const info = el("span", "library-info"); info.append(el("strong", "", item.id), el("span", "", disabled ? `${item.url} · zaten listede` : item.url));
+    label.append(checkbox, info); choices.append(label);
+  });
+  if (!items.length) choices.append(el("div", "empty compact", "Kütüphane boş."));
+  const addSelected = el("button", "btn primary", "Seçilileri pasif ekle");
+  addSelected.onclick = () => {
+    const selected = [...choices.querySelectorAll("input:checked")].map(input => items.find(item => item.id === input.dataset.id));
+    if (playlist.children.length + selected.length > MAX_PLAYLIST_STREAMS) { toast(`Cihaz listesi ${MAX_PLAYLIST_STREAMS} yayın sınırını aşamaz`); return; }
+    selected.forEach(item => playlist.append(streamRow({ id: item.id, url: item.url, seconds: item.seconds, enabled: false })));
+    backdrop.remove(); toast(`${selected.length} yayın forma pasif eklendi`);
+  };
+  card.append(choices, addSelected); backdrop.append(card); document.body.append(backdrop);
 }
 
 async function openHubMigration() {
@@ -334,7 +506,7 @@ function streamRow(stream = { id: "", enabled: true, seconds: 20, url: "" }, hea
   const enabled = document.createElement("input"); enabled.type = "checkbox"; enabled.checked = stream.enabled; enabled.className = "stream-enabled"; enabled.title = "Aktif";
   const id = document.createElement("input"); id.value = stream.id; id.placeholder = "Yayın ID"; id.className = "stream-id";
   const seconds = document.createElement("input"); seconds.type = "number"; seconds.min = "0"; seconds.max = "86400"; seconds.value = stream.seconds; seconds.className = "stream-seconds";
-  const url = document.createElement("input"); url.value = stream.url; url.placeholder = "http(s)://…, rtmp(s)://… veya rtsp(s)://…"; url.className = "stream-url"; url.autocomplete = "off"; url.spellcheck = false;
+  const url = document.createElement("input"); url.value = stream.url; url.placeholder = "http(s), rtmp(s), rtsp(s), udp veya rtp://239.x.x.x:port"; url.className = "stream-url"; url.autocomplete = "off"; url.spellcheck = false;
   const remove = el("button", "btn ghost remove", "×"); remove.title = "Yayını kaldır"; remove.onclick = () => row.remove();
   row.append(enabled, id, seconds, url, streamHealthView(stream, health), remove); return row;
 }
@@ -385,8 +557,8 @@ function renderDrawer() {
   const healthSummary = el("div", "playlist-health-summary");
   healthSummary.append(badge(`${healthyCount} sağlıklı`, "ok"), badge(`${unhealthyCount} hatalı`, unhealthyCount ? "bad" : ""));
   sectionTitle.append(healthSummary);
-  const actions = el("div", "actions"); const add = el("button", "btn", "+ Yayın"); const send = el("button", "btn primary", "Kaydet ve gönder");
-  actions.append(add, send); sectionTitle.append(actions); playlistSection.append(sectionTitle);
+  const actions = el("div", "actions"); const add = el("button", "btn", "+ Yayın"); const addLibrary = el("button", "btn", "+ Kütüphaneden"); const send = el("button", "btn primary", "Kaydet ve gönder");
+  actions.append(add, addLibrary, send); sectionTitle.append(actions); playlistSection.append(sectionTitle);
   const healthById = new Map(streamHealth.map(item => [item.id, item]));
   const playlist = el("div", "playlist"); (config.streams || []).forEach(item => playlist.append(streamRow(item, healthById.get(item.id)))); if (!config.streams?.length) playlist.append(streamRow());
   add.onclick = () => {
@@ -396,6 +568,7 @@ function renderDrawer() {
     }
     playlist.append(streamRow());
   };
+  addLibrary.onclick = () => openLibraryPicker(playlist);
   send.disabled = !device.approved;
   send.onclick = async () => {
     const streams = [...playlist.querySelectorAll(".stream-row")].map(row => ({
