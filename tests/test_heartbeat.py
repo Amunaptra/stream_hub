@@ -6,7 +6,7 @@ import json
 import httpx
 
 from stream_agent.heartbeat import HeartbeatWorker
-from stream_agent.models import PlayerState
+from stream_agent.models import HealthItem, PlayerState
 from stream_agent.settings import Settings
 from stream_agent.storage import DeviceStore
 
@@ -52,6 +52,20 @@ class HeartbeatController:
         return True, "reboot requested"
 
 
+class CachedHealth:
+    def snapshot(self):
+        return [
+            HealthItem(
+                id="salon-1",
+                url="http://media/salon-1.m3u8",
+                enabled=True,
+                ok=True,
+                status_code=200,
+                latency_ms=42,
+            )
+        ]
+
+
 def test_heartbeat_uses_unique_device_token_and_reports_status(tmp_path) -> None:
     settings = Settings(
         data_dir=tmp_path / "data",
@@ -60,7 +74,9 @@ def test_heartbeat_uses_unique_device_token_and_reports_status(tmp_path) -> None
     )
     store = DeviceStore(settings)
     identity = store.load_or_create_identity()
-    worker = HeartbeatWorker(settings, identity, store, HeartbeatController())
+    worker = HeartbeatWorker(
+        settings, identity, store, HeartbeatController(), CachedHealth()
+    )
     captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -85,6 +101,9 @@ def test_heartbeat_uses_unique_device_token_and_reports_status(tmp_path) -> None
     assert captured["payload"]["device_id"] == identity.device_id
     assert captured["payload"]["reported_config"]["revision"] == 0
     assert captured["payload"]["status"]["disk_free_bytes"] == 6_000_000_000
+    assert captured["payload"]["stream_health"][0]["id"] == "salon-1"
+    assert captured["payload"]["stream_health"][0]["status_code"] == 200
+    assert captured["payload"]["stream_health"][0]["latency_ms"] == 42
 
 
 def test_heartbeat_applies_config_executes_commands_and_reports_results(tmp_path) -> None:
@@ -152,3 +171,53 @@ def test_heartbeat_applies_config_executes_commands_and_reports_results(tmp_path
     assert any(path.endswith("/config-result") for path in reported_paths)
     assert any("cmd-restart/result" in path for path in reported_paths)
     assert any("cmd-reboot/result" in path for path in reported_paths)
+
+
+def test_heartbeat_tests_persists_and_switches_hub_url_without_player_restart(tmp_path) -> None:
+    old_hub = "http://192.168.100.142:8788"
+    new_hub = "http://192.168.100.200:8788"
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        runtime_dir=tmp_path / "run",
+        hub_url=old_hub,
+    )
+    store = DeviceStore(settings)
+    identity = store.load_or_create_identity()
+    controller = HeartbeatController()
+    worker = HeartbeatWorker(settings, identity, store, controller)
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        if request.url.path.endswith("/heartbeat"):
+            return httpx.Response(
+                200,
+                json={
+                    "ok": True,
+                    "approved": True,
+                    "heartbeat_interval_seconds": 10,
+                    "commands": [{
+                        "command_id": "cmd-hub-move",
+                        "command": "hub_url_change",
+                        "hub_url": new_hub,
+                        "created_at": "2026-09-10T12:00:00Z",
+                    }],
+                },
+            )
+        if str(request.url) == f"{new_hub}/healthz":
+            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(204)
+
+    async def execute() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await worker.send_once(client)
+
+    asyncio.run(execute())
+
+    assert worker.hub_url == new_hub
+    assert worker.configured_hub_url == new_hub
+    assert controller.restart_calls == 0
+    assert controller.reboot_calls == 0
+    assert json.loads(settings.hub_config_file.read_text())["hub_url"] == new_hub
+    assert f"{new_hub}/healthz" in requests
+    assert any(url.startswith(old_hub) and url.endswith("cmd-hub-move/result") for url in requests)

@@ -84,3 +84,15 @@ def test_command_results_are_persistent_and_idempotent(tmp_path) -> None:
 
     assert reloaded.command_result("command-1") == (True, "reboot requested")
     assert reloaded.command_result("missing") is None
+
+
+def test_saved_hub_url_overrides_install_seed_after_restart(tmp_path, monkeypatch) -> None:
+    data_dir = tmp_path / "data"
+    settings = Settings(data_dir=data_dir, runtime_dir=tmp_path / "run")
+    DeviceStore(settings).save_hub_url("http://192.168.100.200:8788/")
+    monkeypatch.setenv("STREAM_HUB_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("STREAM_HUB_URL", "http://192.168.100.142:8788")
+
+    loaded = Settings.from_env()
+
+    assert loaded.hub_url == "http://192.168.100.200:8788"

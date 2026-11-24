@@ -1,0 +1,16 @@
+[Unit]
+Description=Backup Stream Hub SQLite database
+After=stream-hub.service
+
+[Service]
+Type=oneshot
+User=stream-hub
+Group=stream-hub
+EnvironmentFile=/etc/stream-hub/hub.env
+Environment=STREAM_HUB_BACKUP_DIR=/var/backups/stream-hub
+ExecStart=/opt/stream-hub/venv/bin/python /opt/stream-hub/hub/installer/backup_sqlite.py
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/stream-hub /var/backups/stream-hub

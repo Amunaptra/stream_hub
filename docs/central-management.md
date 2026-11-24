@@ -35,4 +35,4 @@ POST /api/v1/devices/{device_id}/commands
 GET  /api/v1/devices/{device_id}/commands
 ```
 
-Bu endpoint'ler Hub admin Bearer token gerektirir. Config ve komut sonuçlarını bildiren cihaz endpoint'leri ise ilgili cihazın benzersiz token'ını doğrular.
+Bu endpoint'ler Hub yönetici oturumu veya HTTP Basic kullanıcı adı/parola doğrulaması gerektirir. Config ve komut sonuçlarını bildiren cihaz endpoint'leri ise ilgili cihazın benzersiz token'ını doğrular.
