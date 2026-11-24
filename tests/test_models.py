@@ -7,6 +7,16 @@ from stream_hub_backend.models import HubPlaylistDraft, HubStreamItem
 from stream_agent.models import PlaylistConfig, StreamItem
 
 
+@pytest.mark.parametrize("model", [PlaylistConfig, HubPlaylistDraft])
+def test_audio_defaults_and_validation(model) -> None:
+    assert model().audio.enabled is False
+    config = model(audio={"enabled": True, "volume": 37, "output": "usb"})
+    assert config.model_dump()["audio"] == {"enabled": True, "volume": 37, "output": "usb"}
+    for audio in [{"volume": -1}, {"volume": 101}, {"output": "shell"}]:
+        with pytest.raises(ValidationError):
+            model(audio=audio)
+
+
 def test_playlist_accepts_zero_seconds() -> None:
     playlist = PlaylistConfig(
         revision=1,

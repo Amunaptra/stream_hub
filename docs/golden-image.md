@@ -1,5 +1,9 @@
 # Odroid golden image
 
+The v0.1.8 sound image adds per-device Hub-managed audio. New clones start
+with audio disabled and an empty playlist. The HDMI user belongs to the audio
+group. Enable audio and choose USB/HDMI from the Hub after device approval.
+
 This procedure creates a full-disk, clone-safe image of a configured Odroid.
 The source device remains registered and usable after capture.
 

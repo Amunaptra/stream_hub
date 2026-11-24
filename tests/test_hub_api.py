@@ -109,6 +109,21 @@ def test_unknown_device_is_auto_discovered_as_pending(tmp_path) -> None:
     assert devices.json()[0]["online"] is True
 
 
+def test_audio_config_round_trip(tmp_path) -> None:
+    client, _ = make_client(tmp_path)
+    device = {"Authorization": f"Bearer {DEVICE_TOKEN}"}
+    with client:
+        client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
+        client.post("/api/v1/devices/odroid-test-001/approve", headers=ADMIN)
+        result = client.put("/api/v1/devices/odroid-test-001/config", headers=ADMIN,
+                            json={"streams": [], "audio": {"enabled": True, "volume": 24, "output": "usb"}})
+        assert result.status_code == 200
+        heartbeat = client.post("/api/v1/devices/heartbeat", headers=device, json=payload())
+        assert heartbeat.json()["desired_config"]["audio"] == {"enabled": True, "volume": 24, "output": "usb"}
+        saved = client.get("/api/v1/devices/odroid-test-001/config", headers=ADMIN)
+        assert saved.json()["audio"] == result.json()["audio"]
+
+
 def test_device_can_be_approved_and_next_heartbeat_reports_approval(tmp_path) -> None:
     client, _ = make_client(tmp_path)
     admin = ADMIN

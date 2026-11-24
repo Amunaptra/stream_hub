@@ -55,6 +55,22 @@ install -m 0644 "${package_root}/pyproject.toml" \
   "${MOUNT_DIR}/opt/stream-hub-device/pyproject.toml"
 install -m 0644 "${package_root}/requirements-device.txt" \
   "${MOUNT_DIR}/opt/stream-hub-device/requirements-device.txt"
+python3 - "${MOUNT_DIR}/etc/group" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+rows = []
+for line in path.read_text().splitlines():
+    fields = line.split(":")
+    if fields[0] == "audio":
+        members = [m for m in fields[3].split(",") if m]
+        if "odroid" not in members:
+            members.append("odroid")
+        fields[3] = ",".join(members)
+    rows.append(":".join(fields))
+path.write_text("\n".join(rows) + "\n")
+PY
+rm -f "${MOUNT_DIR}/etc/systemd/system/stream-player.service.d/audio.conf"
 
 site_packages="$(find "${MOUNT_DIR}/opt/stream-hub-device/venv/lib" \
   -type d -path '*/site-packages' | head -1)"

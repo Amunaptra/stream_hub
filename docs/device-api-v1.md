@@ -24,6 +24,12 @@ Token ilk kurulumda `/etc/stream-hub/device.json` içinde oluşturulur. Hub pair
 
 ## Config revision kuralları
 
+Config ayrıca `audio` alanı içerir:
+`{"enabled": false, "volume": 50, "output": "auto"}`.
+`volume` 0–100, `output` `auto`, `hdmi` veya `usb` olabilir. Alanı olmayan eski
+config'lerde ses kapalıdır. Ses ayarları da aynı revision ve rollback kurallarına
+tabidir. Seçili ses kartı yoksa player başka karta otomatik geçmez.
+
 - Hub her içerik değişikliğinde revision değerini artırır.
 - Daha eski revision `409 Conflict` ile reddedilir.
 - Aynı revision ve aynı içerik idempotent başarı sayılır; player tekrar başlatılmaz.

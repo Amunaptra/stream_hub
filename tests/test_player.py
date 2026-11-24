@@ -58,6 +58,26 @@ def test_mpv_is_started_once_in_idle_keep_open_mode() -> None:
     assert not any(item.startswith("http") for item in PLAYER.MPV_COMMAND)
 
 
+def test_audio_is_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert PLAYER.mpv_audio_options() == ["--no-audio"]
+    monkeypatch.setattr(PLAYER.Path, "read_text", lambda *a, **k: " 1 [Device ]: USB-Audio - USB Audio Device")
+    options = PLAYER.mpv_audio_options(PLAYER.AudioSettings(enabled=True, output="usb"))
+    assert "--no-audio" not in options
+    assert "--audio-device=alsa/plughw:CARD=Device,DEV=0" in options
+    assert "--volume=50" in options
+
+
+def test_missing_usb_never_falls_back_to_hdmi(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(PLAYER.Path, "read_text", lambda *a, **k: " 0 [ODROIDHDMI ]: ODROID-HDMI")
+    with pytest.raises(RuntimeError, match="unavailable"):
+        PLAYER.mpv_audio_options(PLAYER.AudioSettings(enabled=True, output="usb"))
+
+
+def test_hdmi_volume_and_mute() -> None:
+    assert PLAYER.mpv_audio_options(PLAYER.AudioSettings(enabled=False, volume=100)) == ["--no-audio"]
+    assert "--volume=0" in PLAYER.mpv_audio_options(PLAYER.AudioSettings(enabled=True, volume=0))
+
+
 def test_rtmp_source_precheck_uses_ffprobe(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
     options: list[dict[str, object]] = []

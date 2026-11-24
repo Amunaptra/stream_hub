@@ -63,10 +63,17 @@ class StreamItem(BaseModel):
         return validate_stream_url(value)
 
 
+class AudioSettings(BaseModel):
+    enabled: bool = False
+    volume: int = Field(default=50, ge=0, le=100)
+    output: Literal["auto", "hdmi", "usb"] = "auto"
+
+
 class PlaylistConfig(BaseModel):
     revision: int = Field(default=0, ge=0)
     default_seconds: int = Field(default=20, ge=0, le=86_400)
     streams: list[StreamItem] = Field(default_factory=list, max_length=50)
+    audio: AudioSettings = Field(default_factory=AudioSettings)
 
     @model_validator(mode="after")
     def unique_stream_ids(self) -> "PlaylistConfig":

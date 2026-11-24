@@ -16,7 +16,7 @@ from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from stream_agent.models import PlaylistConfig, StreamItem
+from stream_agent.models import AudioSettings, PlaylistConfig, StreamItem
 
 
 CONFIG_FILE = Path(
@@ -70,6 +70,31 @@ MULTICAST_BUFFER_SECONDS = max(
 def mpv_seconds(value: float) -> str:
     return f"{value:g}"
 
+
+def mpv_audio_options(audio: AudioSettings | None = None) -> list[str]:
+    audio = audio or AudioSettings()
+    if not audio.enabled:
+        return ["--no-audio"]
+    if audio.output == "auto":
+        device = "alsa"
+    else:
+        cards = Path("/proc/asound/cards").read_text(encoding="utf-8")
+        card_id = None
+        for line in cards.splitlines():
+            if "[" not in line or "]" not in line:
+                continue
+            if (audio.output == "usb" and "USB" in line) or (
+                audio.output == "hdmi" and "HDMI" in line
+            ):
+                card_id = line.split("[", 1)[1].split("]", 1)[0].strip()
+                break
+        if not card_id:
+            raise RuntimeError(f"requested audio output unavailable: {audio.output}")
+        device = f"alsa/plughw:CARD={card_id},DEV=0"
+    return ["--audio=auto", "--ao=alsa", f"--audio-device={device}",
+            f"--volume={audio.volume}", "--volume-max=100"]
+
+
 MPV_COMMAND = [
     "mpv",
     "--vo=sdl",
@@ -79,7 +104,7 @@ MPV_COMMAND = [
     "--keepaspect=yes",
     "--geometry=0:0",
     "--no-config",
-    "--no-audio",
+    *mpv_audio_options(),
     "--stop-screensaver",
     "--cache=yes",
     f"--cache-secs={mpv_seconds(DEFAULT_BUFFER_SECONDS)}",
@@ -207,8 +232,11 @@ class PersistentMpv:
     def start(self) -> None:
         RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
         MPV_SOCKET.unlink(missing_ok=True)
+        audio = load_playlist().audio
+        command = [item for item in MPV_COMMAND if item != "--no-audio"]
+        command.extend(mpv_audio_options(audio))
         self.process = subprocess.Popen(
-            MPV_COMMAND,
+            command,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

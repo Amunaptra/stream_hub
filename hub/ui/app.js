@@ -550,6 +550,21 @@ function renderDrawer() {
     approve.onclick = async () => { await api(`/api/v1/devices/${encodeURIComponent(device.device_id)}/approve`, { method: "POST" }); toast("Cihaz onaylandı"); await loadDevices(); await openDevice(device.device_id); };
     notice.append(document.createElement("br"), approve); drawer.append(notice);
   }
+  const audioSection = el("section", "section");
+  audioSection.append(el("h3", "", "Ses ayarları"));
+  const audio = config.audio || { enabled: false, volume: 50, output: "auto" };
+  const audioEnabled = document.createElement("input"); audioEnabled.type = "checkbox"; audioEnabled.checked = audio.enabled;
+  const audioLabel = el("label", "", " Ses açık"); audioLabel.prepend(audioEnabled);
+  const audioOutput = document.createElement("select");
+  for (const [value, label] of [["auto", "Varsayılan çıkış"], ["hdmi", "HDMI"], ["usb", "USB ses kartı"]]) {
+    const option = document.createElement("option"); option.value = value; option.textContent = label; audioOutput.append(option);
+  }
+  audioOutput.value = audio.output;
+  const audioVolume = document.createElement("input"); audioVolume.type = "range"; audioVolume.min = "0"; audioVolume.max = "100"; audioVolume.value = audio.volume;
+  const volumeLabel = el("span", "", `%${audio.volume}`); audioVolume.oninput = () => { volumeLabel.textContent = `%${audioVolume.value}`; };
+  audioSection.append(audioLabel, audioOutput, audioVolume, volumeLabel,
+    el("small", "", "Kaydet ve gönder ile uygulanır. USB/HDMI seçiliyse kart bağlı olmalıdır. Başlangıçta düşük ses kullanın."));
+  drawer.append(audioSection);
   const playlistSection = el("section", "section");
   const sectionTitle = el("div", "section-title"); sectionTitle.append(el("h3", "", "Oynatma listesi"));
   const healthyCount = streamHealth.filter(item => item.ok).length;
@@ -579,7 +594,7 @@ function renderDrawer() {
     })).filter(item => item.id || item.url);
     send.disabled = true;
     try {
-      const result = await api(`/api/v1/devices/${encodeURIComponent(device.device_id)}/config`, { method: "PUT", body: JSON.stringify({ default_seconds: config.default_seconds || 20, streams }) });
+      const result = await api(`/api/v1/devices/${encodeURIComponent(device.device_id)}/config`, { method: "PUT", body: JSON.stringify({ default_seconds: config.default_seconds || 20, streams, audio: { enabled: audioEnabled.checked, volume: Number(audioVolume.value), output: audioOutput.value } }) });
       toast(`Config revision ${result.revision} gönderim kuyruğunda`); await loadDevices();
     } catch (e) { toast(`Config kaydedilemedi: ${e.message}`); }
     finally { send.disabled = false; }

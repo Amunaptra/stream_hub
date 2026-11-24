@@ -2,7 +2,7 @@
 
 Stream Hub, ağdaki Odroid tabanlı HLS, RTMP, RTSP ve UDP/RTP multicast yayın oynatıcılarını merkezi bir web panelinden keşfetmek, izlemek ve yönetmek için geliştirilen sistemdir.
 
-> **Durum: v0.1.7 saha doğrulamalı kararlı sürüm**
+> **Durum: v0.1.8 — merkezi ses yönetimi**
 >
 > Odroid C4, Ubuntu 22.04/aarch64 ve TrueNAS SCALE üzerinde gerçek cihazlarla
 > kurulum, golden-image klonlama, merkezi config, reboot ve yayın oynatma
@@ -16,6 +16,16 @@ Stream Hub, ağdaki Odroid tabanlı HLS, RTMP, RTSP ve UDP/RTP multicast yayın 
 Sistem 15 Odroid cihazını merkezi olarak yönetmek üzere tasarlanmıştır. Cihazlar Hub olmasa da son geçerli oynatma listesiyle bağımsız çalışmaya devam eder.
 
 ## Bileşenler
+
+### v0.1.8 ses yönetimi
+
+Her Odroid için Hub cihaz panelinden ses aç/kapat, yüzde 0–100 player seviyesi
+ve varsayılan/HDMI/USB çıkışı seçilebilir. Ayarlar oynatma listesiyle birlikte
+**Kaydet ve gönder** üzerinden uygulanır ve reboot sonrası korunur. Varsayılan
+ses kapalıdır. USB çıkışı açıkça seçilmişken kart yoksa HDMI'a otomatik geçilmez.
+Player seviyesi amplifikatör ve kartın fiziksel/mixer seviyesinden bağımsızdır;
+ilk kullanımı düşük sesle doğrulayın. Yeni public imaj boş liste ve kapalı sesle
+başlar; canlı yayınlar ve yönetici parolaları imaja dahil edilmez.
 
 - `device/agent`: Sürümlü cihaz API'si, güvenli config ve sağlık telemetrisi
 - `device/player`: Hub'dan bağımsız HLS/RTMP/RTSP/UDP/RTP oynatma döngüsü
@@ -57,8 +67,8 @@ Sahada doğrulanan başlıca akışlar:
 - ortak yayın kütüphanesi, dosyadan toplu içe aktarma, arama ve toplu silme;
 - MPEG-TS/UDP ve RTP multicast kaynaklarının düşük gecikmeli oynatılması.
 
-Kararlı saha sürümü ayrıntıları için
-[v0.1.7 release notlarına](docs/releases/v0.1.7.md), multicast altyapısı için
+Ses sürümü ayrıntıları için [v0.1.8 release notlarına](docs/releases/v0.1.8.md),
+yayın kütüphanesi için [v0.1.7](docs/releases/v0.1.7.md), multicast altyapısı için
 [v0.1.6](docs/releases/v0.1.6.md) ve önceki RTSP/watchdog kabulü için
 [v0.1.4](docs/releases/v0.1.4.md) notlarına bakın.
 
